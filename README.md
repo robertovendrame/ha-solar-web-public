@@ -162,11 +162,16 @@ Do not publish real public display tokens in screenshots, issues, examples, or d
 
 ## Development status
 
-Current version: `0.4.3`
+Current version: `0.4.4`
 
 Early but functional.
 
 ## Changelog
+
+### v0.4.4 (2024-12-XX)
+- **FIX**: Critical bug fix for AttributeError in entity registry migration
+- **FIX**: Replaced invalid `hass.logger` with proper `_LOGGER` logging
+- **IMPROVEMENT**: Added proper logging imports and logger setup
 
 ### v0.4.3 (2024-12-XX)
 - **FIX**: Resolved _NUMERO suffixes in sensor names by using explicit entity names

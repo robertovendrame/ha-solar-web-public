@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -16,6 +18,8 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import SolarWebPublicCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -87,7 +91,7 @@ async def _async_migrate_entity_registry(
     plant_key = client.plant_key
 
     # Log migration start
-    hass.logger.info(
+    _LOGGER.info(
         "Solar Web Public: Starting entity registry migration for entry %s. "
         "Token: %s, Plant key: %s",
         entry.entry_id,
@@ -123,7 +127,7 @@ async def _async_migrate_entity_registry(
         if registry_entry.domain != "sensor":
             continue
 
-        hass.logger.debug(
+        _LOGGER.debug(
             "Solar Web Public: Checking entity %s with unique_id %s",
             registry_entry.entity_id,
             registry_entry.unique_id,
@@ -135,7 +139,7 @@ async def _async_migrate_entity_registry(
             _, suffix = registry_entry.unique_id.split(f"{DOMAIN}_{token}_", 1)
             new_unique_id = f"{DOMAIN}_{plant_key}_{suffix}"
 
-            hass.logger.info(
+            _LOGGER.info(
                 "Solar Web Public: Migrating entity %s from %s to %s",
                 registry_entry.entity_id,
                 registry_entry.unique_id,
@@ -149,14 +153,14 @@ async def _async_migrate_entity_registry(
                 )
                 migrated_count += 1
             except Exception as e:
-                hass.logger.error(
+                _LOGGER.error(
                     "Solar Web Public: Failed to migrate entity %s: %s",
                     registry_entry.entity_id,
                     e,
                 )
                 continue
 
-    hass.logger.info(
+    _LOGGER.info(
         "Solar Web Public: Migration completed. Migrated %d entities for entry %s",
         migrated_count,
         entry.entry_id,
