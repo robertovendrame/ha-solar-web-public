@@ -162,7 +162,7 @@ Do not publish real public display tokens in screenshots, issues, examples, or d
 
 ## Development status
 
-Current version: `0.3.0`
+Current version: `0.4.0`
 
 Early but functional.
 
