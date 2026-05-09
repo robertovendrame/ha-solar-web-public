@@ -84,84 +84,47 @@ async def _async_migrate_entity_registry(
     """Migrate old entity unique IDs from token-based IDs to hashed plant keys."""
 
     registry = er.async_get(hass)
-    if registry is None:
-        return
 
     token = client.token
     plant_key = client.plant_key
 
-    # Log migration start
     _LOGGER.info(
-        "Solar Web Public: Starting entity registry migration for entry %s. "
-        "Token: %s, Plant key: %s",
+        "Solar Web Public: Starting entity registry migration for entry %s",
         entry.entry_id,
-        token,
-        plant_key,
     )
 
-    sensor_keys = [
-        "plant",
-        "current_power",
-        "production_power",
-        "consumption_power",
-        "grid_power",
-        "feed_in_power",
-        "grid_import_power",
-        "battery_power",
-        "battery_soc",
-        "today_energy",
-        "month_energy",
-        "year_energy",
-        "total_energy",
-        "grid_export_energy_today",
-        "grid_import_energy_today",
-        "today_earning",
-        "month_earning",
-        "year_earning",
-        "total_earning",
-        "diagnostics",
-    ]
-
     migrated_count = 0
+
     for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         if registry_entry.domain != "sensor":
             continue
 
-        _LOGGER.debug(
-            "Solar Web Public: Checking entity %s with unique_id %s",
+        if not registry_entry.unique_id.startswith(f"{DOMAIN}_{token}_"):
+            continue
+
+        _, suffix = registry_entry.unique_id.split(f"{DOMAIN}_{token}_", 1)
+        new_unique_id = f"{DOMAIN}_{plant_key}_{suffix}"
+
+        _LOGGER.info(
+            "Solar Web Public: Migrating entity %s to hashed unique ID",
             registry_entry.entity_id,
-            registry_entry.unique_id,
         )
 
-        # Check if unique_id uses old token-based format
-        if registry_entry.unique_id.startswith(f"{DOMAIN}_{token}_"):
-            # Extract suffix after token
-            _, suffix = registry_entry.unique_id.split(f"{DOMAIN}_{token}_", 1)
-            new_unique_id = f"{DOMAIN}_{plant_key}_{suffix}"
-
-            _LOGGER.info(
-                "Solar Web Public: Migrating entity %s from %s to %s",
+        try:
+            registry.async_update_entity(
                 registry_entry.entity_id,
-                registry_entry.unique_id,
-                new_unique_id,
+                new_unique_id=new_unique_id,
+            )
+            migrated_count += 1
+        except ValueError as err:
+            _LOGGER.warning(
+                "Solar Web Public: Could not migrate entity %s: %s",
+                registry_entry.entity_id,
+                err,
             )
 
-            try:
-                registry.async_update_entity(
-                    registry_entry.entity_id,
-                    new_unique_id=new_unique_id,
-                )
-                migrated_count += 1
-            except Exception as e:
-                _LOGGER.error(
-                    "Solar Web Public: Failed to migrate entity %s: %s",
-                    registry_entry.entity_id,
-                    e,
-                )
-                continue
-
     _LOGGER.info(
-        "Solar Web Public: Migration completed. Migrated %d entities for entry %s",
-        migrated_count,
+        "Solar Web Public: Entity registry migration completed for entry %s. Migrated %d entities",
         entry.entry_id,
+        migrated_count,
     )

@@ -162,11 +162,16 @@ Do not publish real public display tokens in screenshots, issues, examples, or d
 
 ## Development status
 
-Current version: `0.4.4`
+Current version: `0.4.5`
 
 Early but functional.
 
 ## Changelog
+
+### v0.4.5 (2024-12-XX)
+- **SECURITY**: Removed token logging from entity registry migration to prevent credential exposure
+- **CLEANUP**: Removed unused sensor_keys list from migration function
+- **IMPROVEMENT**: Improved logging messages to avoid exposing sensitive information
 
 ### v0.4.4 (2024-12-XX)
 - **FIX**: Critical bug fix for AttributeError in entity registry migration
