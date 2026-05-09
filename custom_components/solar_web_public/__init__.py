@@ -86,6 +86,15 @@ async def _async_migrate_entity_registry(
     token = client.token
     plant_key = client.plant_key
 
+    # Log migration start
+    hass.logger.info(
+        "Solar Web Public: Starting entity registry migration for entry %s. "
+        "Token: %s, Plant key: %s",
+        entry.entry_id,
+        token,
+        plant_key,
+    )
+
     sensor_keys = [
         "plant",
         "current_power",
@@ -109,9 +118,16 @@ async def _async_migrate_entity_registry(
         "diagnostics",
     ]
 
+    migrated_count = 0
     for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         if registry_entry.domain != "sensor":
             continue
+
+        hass.logger.debug(
+            "Solar Web Public: Checking entity %s with unique_id %s",
+            registry_entry.entity_id,
+            registry_entry.unique_id,
+        )
 
         # Check if unique_id uses old token-based format
         if registry_entry.unique_id.startswith(f"{DOMAIN}_{token}_"):
@@ -119,11 +135,29 @@ async def _async_migrate_entity_registry(
             _, suffix = registry_entry.unique_id.split(f"{DOMAIN}_{token}_", 1)
             new_unique_id = f"{DOMAIN}_{plant_key}_{suffix}"
 
+            hass.logger.info(
+                "Solar Web Public: Migrating entity %s from %s to %s",
+                registry_entry.entity_id,
+                registry_entry.unique_id,
+                new_unique_id,
+            )
+
             try:
                 registry.async_update_entity(
                     registry_entry.entity_id,
                     new_unique_id=new_unique_id,
                 )
-            except Exception:
-                # If migration fails, continue with other entities
+                migrated_count += 1
+            except Exception as e:
+                hass.logger.error(
+                    "Solar Web Public: Failed to migrate entity %s: %s",
+                    registry_entry.entity_id,
+                    e,
+                )
                 continue
+
+    hass.logger.info(
+        "Solar Web Public: Migration completed. Migrated %d entities for entry %s",
+        migrated_count,
+        entry.entry_id,
+    )
