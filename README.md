@@ -162,11 +162,16 @@ Do not publish real public display tokens in screenshots, issues, examples, or d
 
 ## Development status
 
-Current version: `0.4.2`
+Current version: `0.4.3`
 
 Early but functional.
 
 ## Changelog
+
+### v0.4.3 (2024-12-XX)
+- **FIX**: Resolved _NUMERO suffixes in sensor names by using explicit entity names
+- **BREAKING**: Removed entity name translation, now uses explicit names (device name + sensor name)
+- **IMPROVEMENT**: Each sensor now has a unique, descriptive name
 
 ### v0.4.2 (2024-12-XX)
 - **FIX**: Added entity registry migration to fix duplicate entity names
