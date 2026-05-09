@@ -7,7 +7,8 @@
         "data": {
           "name": "Nome impianto",
           "shared_url": "URL condiviso Solar.web",
-          "refresh_interval": "Intervallo aggiornamento in secondi"
+          "refresh_interval": "Intervallo aggiornamento",
+          "enabled_sensors": "Sensori da creare"
         }
       }
     },
@@ -17,6 +18,18 @@
     },
     "abort": {
       "already_configured": "Questo impianto è già configurato."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opzioni Solar Web Public",
+        "description": "Modifica l'intervallo di aggiornamento e scegli quali sensori mantenere attivi per questo impianto. Il sensore principale viene sempre creato.",
+        "data": {
+          "refresh_interval": "Intervallo aggiornamento",
+          "enabled_sensors": "Sensori attivi"
+        }
+      }
     }
   },
   "entity": {

@@ -1,0 +1,67 @@
+{
+  "services": {},
+  "entities": {
+    "sensor": {
+      "plant": {
+        "default": "mdi:solar-power-variant"
+      },
+      "current_power": {
+        "default": "mdi:solar-power"
+      },
+      "production_power": {
+        "default": "mdi:solar-panel-large"
+      },
+      "consumption_power": {
+        "default": "mdi:home-lightning-bolt"
+      },
+      "grid_power": {
+        "default": "mdi:transmission-tower"
+      },
+      "feed_in_power": {
+        "default": "mdi:transmission-tower-export"
+      },
+      "grid_import_power": {
+        "default": "mdi:transmission-tower-import"
+      },
+      "battery_power": {
+        "default": "mdi:battery-charging"
+      },
+      "battery_soc": {
+        "default": "mdi:battery"
+      },
+      "today_energy": {
+        "default": "mdi:calendar-today"
+      },
+      "month_energy": {
+        "default": "mdi:calendar-month"
+      },
+      "year_energy": {
+        "default": "mdi:calendar"
+      },
+      "total_energy": {
+        "default": "mdi:counter"
+      },
+      "grid_export_energy_today": {
+        "default": "mdi:transmission-tower-export"
+      },
+      "grid_import_energy_today": {
+        "default": "mdi:transmission-tower-import"
+      },
+      "today_earning": {
+        "default": "mdi:cash"
+      },
+      "month_earning": {
+        "default": "mdi:cash-multiple"
+      },
+      "year_earning": {
+        "default": "mdi:cash-clock"
+      },
+      "total_earning": {
+        "default": "mdi:cash-register"
+      },
+      "diagnostics": {
+        "default": "mdi:bug-outline"
+      }
+    }
+  }
+}

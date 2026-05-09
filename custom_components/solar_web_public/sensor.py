@@ -23,7 +23,33 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_NAME, DOMAIN
+from .const import (
+    ALL_SENSOR_KEYS,
+    CONF_ENABLED_SENSORS,
+    CONF_NAME,
+    DEFAULT_ENABLED_SENSOR_KEYS,
+    DOMAIN,
+    SENSOR_BATTERY_POWER,
+    SENSOR_BATTERY_SOC,
+    SENSOR_CONSUMPTION_POWER,
+    SENSOR_CURRENT_POWER,
+    SENSOR_DIAGNOSTICS,
+    SENSOR_FEED_IN_POWER,
+    SENSOR_GRID_EXPORT_ENERGY_TODAY,
+    SENSOR_GRID_IMPORT_ENERGY_TODAY,
+    SENSOR_GRID_IMPORT_POWER,
+    SENSOR_GRID_POWER,
+    SENSOR_MONTH_EARNING,
+    SENSOR_MONTH_ENERGY,
+    SENSOR_PLANT,
+    SENSOR_PRODUCTION_POWER,
+    SENSOR_TODAY_EARNING,
+    SENSOR_TODAY_ENERGY,
+    SENSOR_TOTAL_EARNING,
+    SENSOR_TOTAL_ENERGY,
+    SENSOR_YEAR_EARNING,
+    SENSOR_YEAR_ENERGY,
+)
 from .coordinator import SolarWebPublicCoordinator
 
 
@@ -32,169 +58,167 @@ class SolarWebSensorDescription(SensorEntityDescription):
     """Solar Web sensor description."""
 
     data_key: str | None = None
-    copy_all_attributes: bool = False
 
 
-SENSOR_DESCRIPTIONS: tuple[SolarWebSensorDescription, ...] = (
-    SolarWebSensorDescription(
-        key="plant",
+SENSOR_DESCRIPTIONS: dict[str, SolarWebSensorDescription] = {
+    SENSOR_PLANT: SolarWebSensorDescription(
+        key=SENSOR_PLANT,
         name=None,
         icon="mdi:solar-power-variant",
         data_key=None,
-        copy_all_attributes=True,
     ),
-    SolarWebSensorDescription(
-        key="current_power",
+    SENSOR_CURRENT_POWER: SolarWebSensorDescription(
+        key=SENSOR_CURRENT_POWER,
         name="Potenza attuale",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="current_power_w",
     ),
-    SolarWebSensorDescription(
-        key="production_power",
+    SENSOR_PRODUCTION_POWER: SolarWebSensorDescription(
+        key=SENSOR_PRODUCTION_POWER,
         name="Potenza produzione",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="production_w",
     ),
-    SolarWebSensorDescription(
-        key="consumption_power",
+    SENSOR_CONSUMPTION_POWER: SolarWebSensorDescription(
+        key=SENSOR_CONSUMPTION_POWER,
         name="Potenza consumo",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="consumption_w",
     ),
-    SolarWebSensorDescription(
-        key="grid_power",
+    SENSOR_GRID_POWER: SolarWebSensorDescription(
+        key=SENSOR_GRID_POWER,
         name="Potenza rete",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="grid_power_w",
     ),
-    SolarWebSensorDescription(
-        key="feed_in_power",
+    SENSOR_FEED_IN_POWER: SolarWebSensorDescription(
+        key=SENSOR_FEED_IN_POWER,
         name="Potenza immessa in rete",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="feed_in_w",
     ),
-    SolarWebSensorDescription(
-        key="grid_import_power",
+    SENSOR_GRID_IMPORT_POWER: SolarWebSensorDescription(
+        key=SENSOR_GRID_IMPORT_POWER,
         name="Potenza prelevata dalla rete",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="energy_from_grid_w",
     ),
-    SolarWebSensorDescription(
-        key="battery_power",
+    SENSOR_BATTERY_POWER: SolarWebSensorDescription(
+        key=SENSOR_BATTERY_POWER,
         name="Potenza batteria",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="battery_power_w",
     ),
-    SolarWebSensorDescription(
-        key="battery_soc",
+    SENSOR_BATTERY_SOC: SolarWebSensorDescription(
+        key=SENSOR_BATTERY_SOC,
         name="Batteria",
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="battery_soc",
     ),
-    SolarWebSensorDescription(
-        key="today_energy",
+    SENSOR_TODAY_ENERGY: SolarWebSensorDescription(
+        key=SENSOR_TODAY_ENERGY,
         name="Energia oggi",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
         data_key="today_energy_kwh",
     ),
-    SolarWebSensorDescription(
-        key="month_energy",
+    SENSOR_MONTH_ENERGY: SolarWebSensorDescription(
+        key=SENSOR_MONTH_ENERGY,
         name="Energia mese",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
         data_key="month_energy_kwh",
     ),
-    SolarWebSensorDescription(
-        key="year_energy",
+    SENSOR_YEAR_ENERGY: SolarWebSensorDescription(
+        key=SENSOR_YEAR_ENERGY,
         name="Energia anno",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
         data_key="year_energy_kwh",
     ),
-    SolarWebSensorDescription(
-        key="total_energy",
+    SENSOR_TOTAL_ENERGY: SolarWebSensorDescription(
+        key=SENSOR_TOTAL_ENERGY,
         name="Energia totale",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
         data_key="total_energy_kwh",
     ),
-    SolarWebSensorDescription(
-        key="grid_export_energy_today",
+    SENSOR_GRID_EXPORT_ENERGY_TODAY: SolarWebSensorDescription(
+        key=SENSOR_GRID_EXPORT_ENERGY_TODAY,
         name="Energia immessa oggi",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
         data_key="chart_to_grid_kwh",
     ),
-    SolarWebSensorDescription(
-        key="grid_import_energy_today",
+    SENSOR_GRID_IMPORT_ENERGY_TODAY: SolarWebSensorDescription(
+        key=SENSOR_GRID_IMPORT_ENERGY_TODAY,
         name="Energia prelevata oggi",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
         data_key="chart_from_grid_kwh",
     ),
-    SolarWebSensorDescription(
-        key="today_earning",
+    SENSOR_TODAY_EARNING: SolarWebSensorDescription(
+        key=SENSOR_TODAY_EARNING,
         name="Guadagno oggi",
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement=CURRENCY_EURO,
         state_class=SensorStateClass.TOTAL,
         data_key="today_earning",
     ),
-    SolarWebSensorDescription(
-        key="month_earning",
+    SENSOR_MONTH_EARNING: SolarWebSensorDescription(
+        key=SENSOR_MONTH_EARNING,
         name="Guadagno mese",
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement=CURRENCY_EURO,
         state_class=SensorStateClass.TOTAL,
         data_key="month_earning",
     ),
-    SolarWebSensorDescription(
-        key="year_earning",
+    SENSOR_YEAR_EARNING: SolarWebSensorDescription(
+        key=SENSOR_YEAR_EARNING,
         name="Guadagno anno",
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement=CURRENCY_EURO,
         state_class=SensorStateClass.TOTAL,
         data_key="year_earning",
     ),
-    SolarWebSensorDescription(
-        key="total_earning",
+    SENSOR_TOTAL_EARNING: SolarWebSensorDescription(
+        key=SENSOR_TOTAL_EARNING,
         name="Guadagno totale",
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement=CURRENCY_EURO,
         state_class=SensorStateClass.TOTAL,
         data_key="total_earning",
     ),
-    SolarWebSensorDescription(
-        key="diagnostics",
+    SENSOR_DIAGNOSTICS: SolarWebSensorDescription(
+        key=SENSOR_DIAGNOSTICS,
         name="Diagnostica",
         icon="mdi:bug-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         data_key=None,
     ),
-)
+}
 
 
 async def async_setup_entry(
@@ -206,13 +230,27 @@ async def async_setup_entry(
 
     coordinator: SolarWebPublicCoordinator = hass.data[DOMAIN][entry.entry_id]
 
+    enabled_sensor_keys = entry.options.get(
+        CONF_ENABLED_SENSORS,
+        DEFAULT_ENABLED_SENSOR_KEYS,
+    )
+
+    enabled_sensor_keys = [
+        sensor_key
+        for sensor_key in enabled_sensor_keys
+        if sensor_key in ALL_SENSOR_KEYS
+    ]
+
+    if SENSOR_PLANT not in enabled_sensor_keys:
+        enabled_sensor_keys.insert(0, SENSOR_PLANT)
+
     entities = [
         SolarWebPublicSensor(
             coordinator=coordinator,
             entry=entry,
-            description=description,
+            description=SENSOR_DESCRIPTIONS[sensor_key],
         )
-        for description in SENSOR_DESCRIPTIONS
+        for sensor_key in enabled_sensor_keys
     ]
 
     async_add_entities(entities)
@@ -242,7 +280,7 @@ class SolarWebPublicSensor(
 
         token = coordinator.client.token
 
-        if description.key == "plant":
+        if description.key == SENSOR_PLANT:
             self._attr_name = self._plant_name
             self._attr_unique_id = f"{DOMAIN}_{token}_plant"
         else:
@@ -262,10 +300,10 @@ class SolarWebPublicSensor(
 
         data = self.coordinator.data or {}
 
-        if self.entity_description.key == "plant":
+        if self.entity_description.key == SENSOR_PLANT:
             return data.get("status", "unknown")
 
-        if self.entity_description.key == "diagnostics":
+        if self.entity_description.key == SENSOR_DIAGNOSTICS:
             if data.get("actual_data_available") and data.get("productions_available"):
                 return "ok"
             if data.get("payload_length", 0) > 0:
@@ -283,10 +321,10 @@ class SolarWebPublicSensor(
 
         data = self.coordinator.data or {}
 
-        if self.entity_description.key == "diagnostics":
+        if self.entity_description.key == SENSOR_DIAGNOSTICS:
             return self._diagnostic_attributes(data)
 
-        if self.entity_description.key == "plant":
+        if self.entity_description.key == SENSOR_PLANT:
             return self._plant_attributes(data)
 
         return self._minimal_attributes(data)
