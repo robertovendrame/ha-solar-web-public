@@ -26,62 +26,62 @@ from .coordinator import SolarWebPublicCoordinator
 
 
 @dataclass(frozen=True, kw_only=True)
-class SolarWebSensorEntityDescription(SensorEntityDescription):
-    """Solar Web sensor entity description."""
+class SolarWebSensorDescription(SensorEntityDescription):
+    """Solar Web sensor description."""
 
     data_key: str | None = None
 
 
-SENSOR_DESCRIPTIONS: tuple[SolarWebSensorEntityDescription, ...] = (
-    SolarWebSensorEntityDescription(
+SENSOR_DESCRIPTIONS: tuple[SolarWebSensorDescription, ...] = (
+    SolarWebSensorDescription(
         key="plant",
-        translation_key="plant",
+        name=None,
         icon="mdi:solar-power-variant",
         data_key=None,
     ),
-    SolarWebSensorEntityDescription(
+    SolarWebSensorDescription(
         key="current_power",
-        translation_key="current_power",
+        name="Potenza attuale",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="current_power_w",
     ),
-    SolarWebSensorEntityDescription(
+    SolarWebSensorDescription(
         key="today_energy",
-        translation_key="today_energy",
+        name="Energia oggi",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
         data_key="today_energy_kwh",
     ),
-    SolarWebSensorEntityDescription(
+    SolarWebSensorDescription(
         key="total_energy",
-        translation_key="total_energy",
+        name="Energia totale",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
         data_key="total_energy_kwh",
     ),
-    SolarWebSensorEntityDescription(
+    SolarWebSensorDescription(
         key="battery_soc",
-        translation_key="battery_soc",
+        name="Batteria",
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="battery_soc",
     ),
-    SolarWebSensorEntityDescription(
+    SolarWebSensorDescription(
         key="grid_power",
-        translation_key="grid_power",
+        name="Potenza rete",
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="grid_power_w",
     ),
-    SolarWebSensorEntityDescription(
+    SolarWebSensorDescription(
         key="diagnostics",
-        translation_key="diagnostics",
+        name="Diagnostica",
         icon="mdi:bug-outline",
         data_key=None,
     ),
@@ -97,14 +97,16 @@ async def async_setup_entry(
 
     coordinator: SolarWebPublicCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    async_add_entities(
+    entities = [
         SolarWebPublicSensor(
             coordinator=coordinator,
             entry=entry,
             description=description,
         )
         for description in SENSOR_DESCRIPTIONS
-    )
+    ]
+
+    async_add_entities(entities)
 
 
 class SolarWebPublicSensor(
@@ -113,25 +115,33 @@ class SolarWebPublicSensor(
 ):
     """Solar Web Public sensor."""
 
-    entity_description: SolarWebSensorEntityDescription
+    entity_description: SolarWebSensorDescription
 
     def __init__(
         self,
         coordinator: SolarWebPublicCoordinator,
         entry: ConfigEntry,
-        description: SolarWebSensorEntityDescription,
+        description: SolarWebSensorDescription,
     ) -> None:
+        """Initialize the sensor."""
+
         super().__init__(coordinator)
 
         self.entity_description = description
         self._entry = entry
         self._plant_name = entry.data[CONF_NAME]
 
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_has_entity_name = True
+        token = coordinator.client.token
+
+        if description.key == "plant":
+            self._attr_name = self._plant_name
+            self._attr_unique_id = f"{DOMAIN}_{token}_plant"
+        else:
+            self._attr_name = f"{self._plant_name} {description.name}"
+            self._attr_unique_id = f"{DOMAIN}_{token}_{description.key}"
 
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
+            "identifiers": {(DOMAIN, token)},
             "name": self._plant_name,
             "manufacturer": "Fronius",
             "model": "Solar.web shared plant",
@@ -139,7 +149,7 @@ class SolarWebPublicSensor(
 
     @property
     def native_value(self) -> Any:
-        """Return native value."""
+        """Return the native value."""
 
         data = self.coordinator.data or {}
 
@@ -147,7 +157,12 @@ class SolarWebPublicSensor(
             return data.get("status", "unknown")
 
         if self.entity_description.key == "diagnostics":
-            return "ok" if data.get("payload_length", 0) > 0 else "empty"
+            payload_length = data.get("payload_length")
+            if payload_length is None:
+                return "unknown"
+            if int(payload_length) > 0:
+                return "ok"
+            return "empty"
 
         if self.entity_description.data_key is None:
             return None
@@ -155,29 +170,39 @@ class SolarWebPublicSensor(
         return data.get(self.entity_description.data_key)
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return extra attributes."""
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return sensor attributes.
+
+        Important:
+        keep attributes also on diagnostics and main plant sensor,
+        like the original YAML/template test file.
+        """
 
         data = self.coordinator.data or {}
 
+        base_attributes: dict[str, Any] = {
+            "configured_name": self._plant_name,
+            "plant_name": data.get("plant_name"),
+            "location": data.get("location"),
+            "page_title": data.get("page_title"),
+            "status": data.get("status"),
+            "token": data.get("token"),
+            "input_url": data.get("input_url"),
+            "final_url": data.get("final_url"),
+            "last_update": data.get("last_update"),
+            "current_power_w": data.get("current_power_w"),
+            "today_energy_kwh": data.get("today_energy_kwh"),
+            "total_energy_kwh": data.get("total_energy_kwh"),
+            "battery_soc": data.get("battery_soc"),
+            "grid_power_w": data.get("grid_power_w"),
+        }
+
         if self.entity_description.key == "plant":
-            return {
-                "configured_name": self._plant_name,
-                "plant_name": data.get("plant_name"),
-                "location": data.get("location"),
-                "page_title": data.get("page_title"),
-                "current_power_w": data.get("current_power_w"),
-                "today_energy_kwh": data.get("today_energy_kwh"),
-                "total_energy_kwh": data.get("total_energy_kwh"),
-                "battery_soc": data.get("battery_soc"),
-                "grid_power_w": data.get("grid_power_w"),
-                "last_update": data.get("last_update"),
-                "token": data.get("token"),
-                "final_url": data.get("final_url"),
-            }
+            return base_attributes
 
         if self.entity_description.key == "diagnostics":
             return {
+                **base_attributes,
                 "content_type": data.get("content_type"),
                 "payload_length": data.get("payload_length"),
                 "has_api": data.get("has_api"),
@@ -190,4 +215,4 @@ class SolarWebPublicSensor(
                 "debug_preview": data.get("debug_preview"),
             }
 
-        return None
+        return base_attributes
