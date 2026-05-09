@@ -34,40 +34,46 @@ class SolarWebPublicClient:
         return self._plant_key
 
     @property
+    def token(self) -> str:
+        """Return Solar.web public token."""
+        return self._plant_key
+
+    @property
     def shared_url(self) -> str:
-        """Return shared URL."""
-        return self._shared_url
+        """Return normalized shared URL."""
+        return (
+            "https://www.solarweb.com/PublicDisplay/PvSystem"
+            f"?token={self.token}"
+        )
 
     def _extract_plant_key(self, url: str) -> str:
-        """Extract a stable ID from the shared Solar.web URL."""
+        """Extract public token from Solar.web shared URL."""
 
-        patterns = [
-            r"/pv-systems/([^/?#]+)",
-            r"/Home/GuestLogOn\?pvSystemId=([^&#]+)",
-            r"pvSystemId=([^&#]+)",
-            r"plantId=([^&#]+)",
-            r"sid=([^&#]+)",
-            r"token=([^&#]+)",
-            r"id=([^&#]+)",
-        ]
+        match = re.search(
+            r"[?&]token=([a-fA-F0-9-]{36})",
+            url,
+            re.IGNORECASE,
+        )
 
-        for pattern in patterns:
-            match = re.search(pattern, url, re.IGNORECASE)
-            if match:
-                return match.group(1)
+        if match:
+            return match.group(1)
 
-        # Fallback: use a sanitized URL fragment.
-        sanitized = re.sub(r"[^a-zA-Z0-9]+", "_", url).strip("_")
-        if sanitized:
-            return sanitized[-64:]
-
-        raise SolarWebInvalidUrlError("Invalid Solar.web shared URL")
+        raise SolarWebInvalidUrlError("Missing Solar.web public token")
 
     async def async_get_data(self) -> dict[str, Any]:
-        """Fetch plant data from the shared URL."""
+        """Fetch plant data from the shared public URL."""
+
+        headers = {
+            "User-Agent": "HomeAssistant-SolarWebPublic/0.1",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
 
         try:
-            async with self._session.get(self._shared_url) as response:
+            async with self._session.get(
+                self.shared_url,
+                headers=headers,
+                allow_redirects=True,
+            ) as response:
                 if response.status >= 400:
                     raise SolarWebPublicApiError(
                         f"Solar.web returned HTTP {response.status}"
@@ -86,15 +92,15 @@ class SolarWebPublicClient:
         payload: str,
         content_type: str,
     ) -> dict[str, Any]:
-        """
-        Parse Solar.web shared page.
+        """Parse Solar.web public page."""
 
-        This is intentionally temporary.
-        Here we will insert the real parser from your working tests.
-        """
+        plant_name = self._extract_text_after_solarweb(payload)
+        location = self._extract_location(payload)
 
         return {
             "status": "online" if payload else "unknown",
+            "plant_name": plant_name,
+            "location": location,
             "current_power_w": None,
             "today_energy_kwh": None,
             "total_energy_kwh": None,
@@ -103,4 +109,45 @@ class SolarWebPublicClient:
             "last_update": None,
             "content_type": content_type,
             "payload_length": len(payload),
+            "token": self.token,
         }
+
+    def _extract_text_after_solarweb(self, payload: str) -> str | None:
+        """Temporary simple extraction of plant name from HTML."""
+
+        match = re.search(
+            r"SOLAR\.WEB\s*</?[^>]*>\s*([^<]+)",
+            payload,
+            re.IGNORECASE,
+        )
+
+        if match:
+            return match.group(1).strip()
+
+        # Fallback for plain extracted text-like payloads
+        match = re.search(
+            r"SOLAR\.WEB\s+(.+?)\s+Current power",
+            payload,
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        if match:
+            return " ".join(match.group(1).split())
+
+        return None
+
+    def _extract_location(self, payload: str) -> str | None:
+        """Temporary simple extraction of location from HTML."""
+
+        # For now this is intentionally conservative.
+        # We will improve it when we inspect the real JS/API payload.
+        known_match = re.search(
+            r"(Portogruaro|[A-Z][a-zA-ZÀ-ÿ'\- ]{2,})\s*© Fronius",
+            payload,
+            re.IGNORECASE,
+        )
+
+        if known_match:
+            return known_match.group(1).strip()
+
+        return None

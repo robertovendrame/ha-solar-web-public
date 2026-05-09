@@ -156,6 +156,8 @@ class SolarWebPublicSensor(
 
         return {
             "name": self._plant_name,
+            "plant_name": data.get("plant_name"),
+            "location": data.get("location"),
             "current_power_w": data.get("current_power_w"),
             "today_energy_kwh": data.get("today_energy_kwh"),
             "total_energy_kwh": data.get("total_energy_kwh"),
@@ -164,4 +166,5 @@ class SolarWebPublicSensor(
             "last_update": data.get("last_update"),
             "content_type": data.get("content_type"),
             "payload_length": data.get("payload_length"),
+            "token": data.get("token"),
         }
