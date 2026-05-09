@@ -130,21 +130,18 @@ class SolarWebPublicClient:
 
         merged.update(
             {
-                "actual_data_url": self.actual_data_url,
+                "actual_data_url": self._redact_url(self.actual_data_url),
                 "actual_data_available": actual_payload is not None,
                 "actual_data_error": actual_error,
                 "actual_data_debug_keys": self._debug_keys(actual_payload),
-                "actual_data_debug_preview": self._json_preview(actual_payload),
-                "productions_url": self.productions_url,
+                "productions_url": self._redact_url(self.productions_url),
                 "productions_available": productions_payload is not None,
                 "productions_error": productions_error,
                 "productions_debug_keys": self._debug_keys(productions_payload),
-                "productions_debug_preview": self._json_preview(productions_payload),
-                "chart_url": self.chart_url,
+                "chart_url": self._redact_url(self.chart_url),
                 "chart_available": chart_payload is not None,
                 "chart_error": chart_error,
                 "chart_debug_keys": self._debug_keys(chart_payload),
-                "chart_debug_preview": self._json_preview(chart_payload),
             }
         )
 
@@ -248,10 +245,8 @@ class SolarWebPublicClient:
 
         return {
             "status": "online" if payload else "unknown",
-            "configured_token": self.token,
-            "token": self.token,
-            "input_url": self._input_url,
-            "final_url": final_url,
+            "input_url": self._redact_url(self._input_url),
+            "final_url": self._redact_url(final_url),
             "plant_name": plant_name,
             "location": location,
             "page_title": page_title,
@@ -277,8 +272,19 @@ class SolarWebPublicClient:
             "script_count": len(script_sources),
             "script_sources": script_sources[:30],
             "api_candidates": api_candidates[:60],
-            "debug_preview": self._clean_preview(payload),
         }
+
+    def _redact_url(self, value: str | None) -> str | None:
+        """Redact Solar.web token parameters from URLs."""
+        if value is None:
+            return None
+
+        return re.sub(
+            r"([?&](?:token|PublicDisplayToken|publicDisplayToken)=)[^&]+",
+            r"\1***",
+            value,
+            flags=re.IGNORECASE,
+        )
 
     def _parse_actual_payload(
         self,
@@ -548,17 +554,24 @@ class SolarWebPublicClient:
             cleaned = value.strip()
             cleaned = cleaned.replace("\u00a0", "")
             cleaned = cleaned.replace(" ", "")
+            cleaned = re.sub(r"[^0-9,\.\-]", "", cleaned)
 
-            if "," in cleaned and "." in cleaned:
-                cleaned = cleaned.replace(".", "")
-                cleaned = cleaned.replace(",", ".")
-            elif "," in cleaned:
-                cleaned = cleaned.replace(",", ".")
-
-            cleaned = re.sub(r"[^0-9.\-]", "", cleaned)
-
-            if cleaned in ["", "-", ".", "-."]:
+            if cleaned in ["", "-", ".", ",", "-.", "-,"]:
                 return None
+
+            last_comma = cleaned.rfind(",")
+            last_dot = cleaned.rfind(".")
+
+            if last_comma != -1 and last_dot != -1:
+                if last_comma > last_dot:
+                    cleaned = cleaned.replace(".", "")
+                    cleaned = cleaned.replace(",", ".")
+                else:
+                    cleaned = cleaned.replace(",", "")
+            elif last_comma != -1:
+                cleaned = cleaned.replace(",", ".")
+            elif last_dot != -1 and cleaned.count(".") > 1:
+                cleaned = cleaned.replace(".", "")
 
             try:
                 return float(cleaned)
@@ -674,15 +687,20 @@ class SolarWebPublicClient:
             for match in re.findall(pattern, payload, re.IGNORECASE):
                 cleaned = match.strip()
                 if cleaned:
-                    candidates.add(self._normalize_url(cleaned))
+                    normalized = self._normalize_url(cleaned)
+                    redacted = self._redact_url(normalized)
+                    if redacted:
+                        candidates.add(redacted)
 
-        candidates.add(self.actual_data_url)
-        candidates.add(self.productions_url)
-        candidates.add(self.chart_url)
-        candidates.add(self.weather_url)
+        candidates.add(self._redact_url(self.actual_data_url) or self.actual_data_url)
+        candidates.add(self._redact_url(self.productions_url) or self.productions_url)
+        candidates.add(self._redact_url(self.chart_url) or self.chart_url)
+        candidates.add(self._redact_url(self.weather_url) or self.weather_url)
         candidates.add(
-            f"{self.BASE_URL}/PvSystemImages/GetUrlForPublicDisplayToken"
-            f"?token={self.token}"
+            self._redact_url(
+                f"{self.BASE_URL}/PvSystemImages/GetUrlForPublicDisplayToken"
+                f"?token={self.token}"
+            )
         )
 
         return sorted(candidates)

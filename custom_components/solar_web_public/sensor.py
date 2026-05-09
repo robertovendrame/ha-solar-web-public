@@ -284,13 +284,15 @@ class SolarWebPublicSensor(
             self._attr_name = self._plant_name
             self._attr_unique_id = f"{DOMAIN}_{token}_plant"
         else:
-            self._attr_name = f"{self._plant_name} {description.name}"
+            self._attr_has_entity_name = True
+            self._attr_translation_key = description.key
+            self._attr_name = None
             self._attr_unique_id = f"{DOMAIN}_{token}_{description.key}"
 
         self._attr_device_info = {
             "identifiers": {(DOMAIN, token)},
             "name": self._plant_name,
-            "manufacturer": "Fronius",
+            "manufacturer": "Solar.web",
             "model": "Solar.web shared plant",
         }
 
@@ -314,6 +316,15 @@ class SolarWebPublicSensor(
             return None
 
         return data.get(self.entity_description.data_key)
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Return the unit of measurement for monetary sensors."""
+
+        if self.entity_description.device_class == SensorDeviceClass.MONETARY:
+            return (self.coordinator.data or {}).get("earning_currency") or CURRENCY_EURO
+
+        return self.entity_description.native_unit_of_measurement
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
@@ -377,9 +388,6 @@ class SolarWebPublicSensor(
             "earning_currency": data.get("earning_currency"),
             "grid_export_energy_today_kwh": data.get("chart_to_grid_kwh"),
             "grid_import_energy_today_kwh": data.get("chart_from_grid_kwh"),
-            "token": data.get("token"),
-            "input_url": data.get("input_url"),
-            "final_url": data.get("final_url"),
         }
 
     def _diagnostic_attributes(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -398,12 +406,10 @@ class SolarWebPublicSensor(
             "actual_data_available": data.get("actual_data_available"),
             "actual_data_error": data.get("actual_data_error"),
             "actual_data_debug_keys": data.get("actual_data_debug_keys"),
-            "actual_data_debug_preview": data.get("actual_data_debug_preview"),
             "productions_url": data.get("productions_url"),
             "productions_available": data.get("productions_available"),
             "productions_error": data.get("productions_error"),
             "productions_debug_keys": data.get("productions_debug_keys"),
-            "productions_debug_preview": data.get("productions_debug_preview"),
             "chart_url": data.get("chart_url"),
             "chart_available": data.get("chart_available"),
             "chart_error": data.get("chart_error"),
