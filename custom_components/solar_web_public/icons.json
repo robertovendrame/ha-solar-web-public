@@ -1,6 +1,6 @@
 {
   "services": {},
-  "entities": {
+  "entity": {
     "sensor": {
       "plant": {
         "default": "mdi:solar-power-variant"
@@ -24,7 +24,7 @@
         "default": "mdi:transmission-tower-import"
       },
       "battery_power": {
-        "default": "mdi:battery-charging"
+        "default": "mdi:battery"
       },
       "battery_soc": {
         "default": "mdi:battery"
