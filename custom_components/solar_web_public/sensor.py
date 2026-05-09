@@ -79,6 +79,12 @@ SENSOR_DESCRIPTIONS: tuple[SolarWebSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         data_key="grid_power_w",
     ),
+    SolarWebSensorEntityDescription(
+        key="diagnostics",
+        translation_key="diagnostics",
+        icon="mdi:bug-outline",
+        data_key=None,
+    ),
 )
 
 
@@ -140,6 +146,9 @@ class SolarWebPublicSensor(
         if self.entity_description.key == "plant":
             return data.get("status", "unknown")
 
+        if self.entity_description.key == "diagnostics":
+            return "ok" if data.get("payload_length", 0) > 0 else "empty"
+
         if self.entity_description.data_key is None:
             return None
 
@@ -149,22 +158,36 @@ class SolarWebPublicSensor(
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return extra attributes."""
 
-        if self.entity_description.key != "plant":
-            return None
-
         data = self.coordinator.data or {}
 
-        return {
-            "name": self._plant_name,
-            "plant_name": data.get("plant_name"),
-            "location": data.get("location"),
-            "current_power_w": data.get("current_power_w"),
-            "today_energy_kwh": data.get("today_energy_kwh"),
-            "total_energy_kwh": data.get("total_energy_kwh"),
-            "battery_soc": data.get("battery_soc"),
-            "grid_power_w": data.get("grid_power_w"),
-            "last_update": data.get("last_update"),
-            "content_type": data.get("content_type"),
-            "payload_length": data.get("payload_length"),
-            "token": data.get("token"),
-        }
+        if self.entity_description.key == "plant":
+            return {
+                "configured_name": self._plant_name,
+                "plant_name": data.get("plant_name"),
+                "location": data.get("location"),
+                "page_title": data.get("page_title"),
+                "current_power_w": data.get("current_power_w"),
+                "today_energy_kwh": data.get("today_energy_kwh"),
+                "total_energy_kwh": data.get("total_energy_kwh"),
+                "battery_soc": data.get("battery_soc"),
+                "grid_power_w": data.get("grid_power_w"),
+                "last_update": data.get("last_update"),
+                "token": data.get("token"),
+                "final_url": data.get("final_url"),
+            }
+
+        if self.entity_description.key == "diagnostics":
+            return {
+                "content_type": data.get("content_type"),
+                "payload_length": data.get("payload_length"),
+                "has_api": data.get("has_api"),
+                "has_public_display": data.get("has_public_display"),
+                "has_current_power": data.get("has_current_power"),
+                "has_pv_system": data.get("has_pv_system"),
+                "script_count": data.get("script_count"),
+                "script_sources": data.get("script_sources"),
+                "api_candidates": data.get("api_candidates"),
+                "debug_preview": data.get("debug_preview"),
+            }
+
+        return None

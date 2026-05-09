@@ -38,6 +38,9 @@
       },
       "grid_power": {
         "name": "Potenza rete"
+      },
+      "diagnostics": {
+        "name": "Diagnostica"
       }
     }
   }
