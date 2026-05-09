@@ -123,6 +123,11 @@ class SolarWebPublicClient:
             **actual_data,
         }
 
+        if actual_data.get("is_online") is False:
+            merged["status"] = "offline"
+        elif actual_data.get("is_online") is True:
+            merged["status"] = "online"
+
         merged.update(
             {
                 "actual_data_url": self.actual_data_url,
@@ -279,169 +284,74 @@ class SolarWebPublicClient:
         self,
         payload: dict[str, Any] | list[Any] | None,
     ) -> dict[str, Any]:
-        """Parse actual live data endpoint."""
+        """Parse actual live data endpoint.
+
+        Known payload example:
+        {
+          "IsOnline": true,
+          "AllOnline": true,
+          "P_Grid": -5472.2,
+          "P_Load": -628.38,
+          "P_Batt": 6.79,
+          "SOC": 100.0,
+          "P_PV": 6093.79
+        }
+        """
 
         result: dict[str, Any] = {
+            "is_online": None,
+            "all_online": None,
             "current_power_w": None,
             "production_w": None,
             "consumption_w": None,
             "grid_power_w": None,
             "feed_in_w": None,
             "energy_from_grid_w": None,
+            "battery_power_w": None,
             "battery_soc": None,
+            "battery_mode": None,
             "last_update": None,
         }
 
-        if payload is None:
+        if not isinstance(payload, dict):
             return result
 
-        flat = self._flatten_json(payload)
+        is_online = payload.get("IsOnline")
+        all_online = payload.get("AllOnline")
 
-        result["current_power_w"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "currentpower",
-                "actualpower",
-                "currentpvpower",
-                "pvpower",
-                "pac",
-                "powerac",
-                "productionpower",
-                "powerproduction",
-                "pvanlageleistung",
-                "leistung",
-            ],
-            deny_keys=[
-                "chart",
-                "axis",
-                "series",
-                "index",
-                "count",
-                "visible",
-                "success",
-                "error",
-                "status",
-                "percentage",
-                "percent",
-                "relative",
-                "peak",
-                "nominal",
-                "installed",
-            ],
-            min_value=0,
-            max_value=200000,
-        )
+        p_pv = self._to_number(payload.get("P_PV"))
+        p_load = self._to_number(payload.get("P_Load"))
+        p_grid = self._to_number(payload.get("P_Grid"))
+        p_batt = self._to_number(payload.get("P_Batt"))
+        soc = self._to_number(payload.get("SOC"))
+        bat_mode = self._to_number(payload.get("BatMode"))
 
-        result["production_w"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "production",
-                "pvproduction",
-                "pvpower",
-                "currentproduction",
-                "actualproduction",
-            ],
-            deny_keys=[
-                "today",
-                "month",
-                "year",
-                "total",
-                "energy",
-                "earning",
-                "money",
-                "currency",
-                "chart",
-                "axis",
-                "series",
-            ],
-            min_value=0,
-            max_value=200000,
-        )
+        result["is_online"] = is_online if isinstance(is_online, bool) else None
+        result["all_online"] = all_online if isinstance(all_online, bool) else None
 
-        result["consumption_w"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "consumption",
-                "load",
-                "currentconsumption",
-                "actualconsumption",
-            ],
-            deny_keys=[
-                "today",
-                "month",
-                "year",
-                "total",
-                "energy",
-                "earning",
-                "money",
-                "currency",
-                "chart",
-                "axis",
-                "series",
-            ],
-            min_value=0,
-            max_value=200000,
-        )
+        if p_pv is not None:
+            result["current_power_w"] = self._round_power(p_pv)
+            result["production_w"] = self._round_power(p_pv)
 
-        result["grid_power_w"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "gridpower",
-                "grid",
-                "fromgrid",
-                "togrid",
-                "feedin",
-                "feedinpower",
-                "feedpower",
-                "powergrid",
-            ],
-            deny_keys=[
-                "today",
-                "month",
-                "year",
-                "total",
-                "energy",
-                "earning",
-                "money",
-                "currency",
-                "chart",
-                "axis",
-                "series",
-            ],
-            min_value=-200000,
-            max_value=200000,
-        )
+        if p_load is not None:
+            # Solar.web public endpoint may expose load as negative.
+            result["consumption_w"] = self._round_power(abs(p_load))
 
-        result["battery_soc"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "batterysoc",
-                "soc",
-                "stateofcharge",
-                "stateofchargepercentage",
-                "batterypercentage",
-            ],
-            deny_keys=[
-                "power",
-                "energy",
-                "voltage",
-                "current",
-            ],
-            min_value=0,
-            max_value=100,
-        )
+        if p_grid is not None:
+            # Negative usually means feed-in/export to grid.
+            # Positive usually means import from grid.
+            result["grid_power_w"] = self._round_power(p_grid)
+            result["feed_in_w"] = self._round_power(abs(p_grid)) if p_grid < 0 else 0
+            result["energy_from_grid_w"] = self._round_power(p_grid) if p_grid > 0 else 0
 
-        result["last_update"] = self._find_string(
-            flat,
-            preferred_keys=[
-                "lastupdate",
-                "lastupdated",
-                "timestamp",
-                "datetime",
-                "time",
-                "date",
-            ],
-        )
+        if p_batt is not None:
+            result["battery_power_w"] = self._round_power(p_batt)
+
+        if soc is not None:
+            result["battery_soc"] = self._round_percent(soc)
+
+        if bat_mode is not None:
+            result["battery_mode"] = int(bat_mode)
 
         return result
 
@@ -449,7 +359,31 @@ class SolarWebPublicClient:
         self,
         payload: dict[str, Any] | list[Any] | None,
     ) -> dict[str, Any]:
-        """Parse productions and earnings endpoint."""
+        """Parse productions and earnings endpoint.
+
+        Known payload example:
+        {
+          "data": {
+            "Productions": {
+              "TotalUnit": "MWh",
+              "MonthUnit": "kWh",
+              "YearUnit": "kWh",
+              "TodayUnit": "kWh",
+              "Total": "17,21",
+              "Month": "334,91",
+              "Year": "3.322,98",
+              "Today": "25,74"
+            },
+            "Earnings": {
+              "IsoCurrency": "EUR",
+              "Total": "1.459,54",
+              "Month": "32,96",
+              "Year": "400,24",
+              "Today": "2,06"
+            }
+          }
+        }
+        """
 
         result: dict[str, Any] = {
             "today_energy_kwh": None,
@@ -460,154 +394,60 @@ class SolarWebPublicClient:
             "month_earning": None,
             "year_earning": None,
             "total_earning": None,
+            "earning_currency": None,
+            "today_energy_label": None,
+            "month_energy_label": None,
+            "year_energy_label": None,
+            "total_energy_label": None,
         }
 
-        if payload is None:
+        if not isinstance(payload, dict):
             return result
 
-        flat = self._flatten_json(payload)
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return result
 
-        result["today_energy_kwh"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "productiontoday",
-                "todayproduction",
-                "energytoday",
-                "todayenergy",
-                "dayproduction",
-                "productionday",
-                "produzioneoggi",
-                "oggi",
-            ],
-            deny_keys=[
-                "earning",
-                "earnings",
-                "money",
-                "currency",
-                "eur",
-                "euro",
-                "co2",
-            ],
-            min_value=0,
-            max_value=1000000,
-            convert_wh_to_kwh=True,
-        )
+        productions = data.get("Productions")
+        earnings = data.get("Earnings")
 
-        result["month_energy_kwh"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "productionmonth",
-                "monthproduction",
-                "energymonth",
-                "monthenergy",
-            ],
-            deny_keys=[
-                "earning",
-                "earnings",
-                "money",
-                "currency",
-                "eur",
-                "euro",
-                "co2",
-            ],
-            min_value=0,
-            max_value=10000000,
-            convert_wh_to_kwh=True,
-        )
+        if isinstance(productions, dict):
+            result["today_energy_kwh"] = self._energy_to_kwh(
+                productions.get("Today"),
+                productions.get("TodayUnit"),
+            )
+            result["month_energy_kwh"] = self._energy_to_kwh(
+                productions.get("Month"),
+                productions.get("MonthUnit"),
+            )
+            result["year_energy_kwh"] = self._energy_to_kwh(
+                productions.get("Year"),
+                productions.get("YearUnit"),
+            )
+            result["total_energy_kwh"] = self._energy_to_kwh(
+                productions.get("Total"),
+                productions.get("TotalUnit"),
+            )
 
-        result["year_energy_kwh"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "productionyear",
-                "yearproduction",
-                "energyyear",
-                "yearenergy",
-            ],
-            deny_keys=[
-                "earning",
-                "earnings",
-                "money",
-                "currency",
-                "eur",
-                "euro",
-                "co2",
-            ],
-            min_value=0,
-            max_value=100000000,
-            convert_wh_to_kwh=True,
-        )
+            result["today_energy_label"] = productions.get("TodayLabel")
+            result["month_energy_label"] = productions.get("MonthLabel")
+            result["year_energy_label"] = productions.get("YearLabel")
+            result["total_energy_label"] = productions.get("TotalLabel")
 
-        result["total_energy_kwh"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "productiontotal",
-                "totalproduction",
-                "energytotal",
-                "totalenergy",
-                "overallproduction",
-                "lifetimeproduction",
-            ],
-            deny_keys=[
-                "earning",
-                "earnings",
-                "money",
-                "currency",
-                "eur",
-                "euro",
-                "co2",
-            ],
-            min_value=0,
-            max_value=1000000000,
-            convert_wh_to_kwh=True,
-        )
-
-        result["today_earning"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "earningtoday",
-                "todayearning",
-                "savingtoday",
-                "todaysaving",
-            ],
-            min_value=0,
-            max_value=1000000,
-        )
-
-        result["month_earning"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "earningmonth",
-                "monthearning",
-                "savingmonth",
-                "monthsaving",
-            ],
-            min_value=0,
-            max_value=1000000,
-        )
-
-        result["year_earning"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "earningyear",
-                "yearearning",
-                "savingyear",
-                "yearsaving",
-            ],
-            min_value=0,
-            max_value=1000000,
-        )
-
-        result["total_earning"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "earningtotal",
-                "totalearning",
-                "savingtotal",
-                "totalsaving",
-            ],
-            min_value=0,
-            max_value=10000000,
-        )
+        if isinstance(earnings, dict):
+            result["today_earning"] = self._round_money(
+                self._to_number(earnings.get("Today"))
+            )
+            result["month_earning"] = self._round_money(
+                self._to_number(earnings.get("Month"))
+            )
+            result["year_earning"] = self._round_money(
+                self._to_number(earnings.get("Year"))
+            )
+            result["total_earning"] = self._round_money(
+                self._to_number(earnings.get("Total"))
+            )
+            result["earning_currency"] = earnings.get("IsoCurrency")
 
         return result
 
@@ -615,149 +455,85 @@ class SolarWebPublicClient:
         self,
         payload: dict[str, Any] | list[Any] | None,
     ) -> dict[str, Any]:
-        """Parse chart endpoint only as fallback.
-
-        Avoid using generic chart numbers as live sensors, because the chart
-        contains hours, indexes and plotted series that can be mistaken for
-        power values.
-        """
+        """Parse chart endpoint only for graph metadata."""
 
         result: dict[str, Any] = {
             "chart_last_update": None,
+            "chart_has_meter": None,
+            "chart_to_grid_kwh": None,
+            "chart_from_grid_kwh": None,
         }
 
-        if payload is None:
+        if not isinstance(payload, dict):
             return result
 
-        flat = self._flatten_json(payload)
+        result["chart_has_meter"] = payload.get("hasMeter")
 
-        result["chart_last_update"] = self._find_string(
-            flat,
-            preferred_keys=[
-                "lastupdate",
-                "lastupdated",
-                "timestamp",
-                "datetime",
-                "time",
-                "date",
-            ],
-        )
+        to_grid = self._to_number(payload.get("toGrid"))
+        from_grid = self._to_number(payload.get("fromGrid"))
+
+        if to_grid is not None:
+            result["chart_to_grid_kwh"] = round(to_grid, 3)
+
+        if from_grid is not None:
+            result["chart_from_grid_kwh"] = round(from_grid, 3)
 
         return result
 
-    def _flatten_json(
+    def _energy_to_kwh(
         self,
         value: Any,
-        prefix: str = "",
-    ) -> list[tuple[str, Any]]:
-        """Flatten JSON object into key path/value pairs."""
-
-        items: list[tuple[str, Any]] = []
-
-        if isinstance(value, dict):
-            for key, child in value.items():
-                child_prefix = f"{prefix}.{key}" if prefix else str(key)
-                items.extend(self._flatten_json(child, child_prefix))
-            return items
-
-        if isinstance(value, list):
-            for index, child in enumerate(value):
-                child_prefix = f"{prefix}[{index}]"
-                items.extend(self._flatten_json(child, child_prefix))
-            return items
-
-        items.append((prefix, value))
-        return items
-
-    def _find_number(
-        self,
-        flat: list[tuple[str, Any]],
-        preferred_keys: list[str],
-        deny_keys: list[str] | None = None,
-        min_value: float | None = None,
-        max_value: float | None = None,
-        convert_wh_to_kwh: bool = False,
+        unit: Any,
     ) -> float | int | None:
-        """Find a likely numeric value by key name."""
+        """Convert Solar.web energy value to kWh."""
 
-        deny_keys = deny_keys or []
-
-        candidates: list[tuple[int, str, float]] = []
-
-        for key, value in flat:
-            normalized_key = self._normalize_key(key)
-
-            if any(deny in normalized_key for deny in deny_keys):
-                continue
-
-            score = 0
-            for preferred in preferred_keys:
-                normalized_preferred = self._normalize_key(preferred)
-                if normalized_preferred in normalized_key:
-                    score += 20
-                elif normalized_key.endswith(normalized_preferred):
-                    score += 10
-
-            if score <= 0:
-                continue
-
-            number = self._to_number(value)
-            if number is None:
-                continue
-
-            if min_value is not None and number < min_value:
-                continue
-
-            if max_value is not None and number > max_value:
-                continue
-
-            if convert_wh_to_kwh and self._looks_like_wh(normalized_key, number):
-                number = number / 1000
-
-            candidates.append((score, normalized_key, number))
-
-        if not candidates:
+        number = self._to_number(value)
+        if number is None:
             return None
 
-        candidates.sort(key=lambda item: item[0], reverse=True)
-        value = candidates[0][2]
+        unit_string = str(unit or "").strip().lower()
 
-        if value.is_integer():
-            return int(value)
+        if unit_string == "wh":
+            number = number / 1000
+        elif unit_string == "mwh":
+            number = number * 1000
+        elif unit_string == "gwh":
+            number = number * 1000000
+        # kWh or missing unit: keep as-is
 
-        return round(value, 3)
+        return self._round_energy(number)
 
-    def _find_string(
-        self,
-        flat: list[tuple[str, Any]],
-        preferred_keys: list[str],
-    ) -> str | None:
-        """Find a likely string value by key name."""
+    def _round_power(self, value: float) -> int:
+        """Round power value to W integer."""
 
-        for key, value in flat:
-            normalized_key = self._normalize_key(key)
+        return int(round(value))
 
-            if not any(
-                self._normalize_key(preferred) in normalized_key
-                for preferred in preferred_keys
-            ):
-                continue
+    def _round_energy(self, value: float) -> float | int:
+        """Round energy value."""
 
-            if isinstance(value, str) and value.strip():
-                return value.strip()
+        rounded = round(value, 3)
+        if rounded.is_integer():
+            return int(rounded)
+        return rounded
 
-        return None
+    def _round_percent(self, value: float) -> float | int:
+        """Round percentage."""
 
-    def _looks_like_wh(self, key: str, value: float) -> bool:
-        """Guess whether an energy value is Wh and should be converted to kWh."""
+        rounded = round(value, 1)
+        if rounded.is_integer():
+            return int(rounded)
+        return rounded
 
-        if "kwh" in key:
-            return False
+    def _round_money(self, value: float | None) -> float | int | None:
+        """Round money value."""
 
-        if "wh" in key:
-            return True
+        if value is None:
+            return None
 
-        return abs(value) > 10000
+        rounded = round(value, 2)
+        if rounded.is_integer():
+            return int(rounded)
+        return rounded
 
     def _to_number(self, value: Any) -> float | None:
         """Convert value to number."""
@@ -790,11 +566,6 @@ class SolarWebPublicClient:
                 return None
 
         return None
-
-    def _normalize_key(self, key: str) -> str:
-        """Normalize a key path."""
-
-        return re.sub(r"[^a-z0-9]+", "", key.lower())
 
     def _extract_title(self, payload: str) -> str | None:
         """Extract HTML title."""
