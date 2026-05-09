@@ -278,19 +278,19 @@ class SolarWebPublicSensor(
         self._entry = entry
         self._plant_name = entry.data[CONF_NAME]
 
-        token = coordinator.client.token
+        plant_key = coordinator.client.plant_key
 
         if description.key == SENSOR_PLANT:
             self._attr_name = self._plant_name
-            self._attr_unique_id = f"{DOMAIN}_{token}_plant"
+            self._attr_unique_id = f"{DOMAIN}_{plant_key}_plant"
         else:
             self._attr_has_entity_name = True
             self._attr_translation_key = description.key
             self._attr_name = None
-            self._attr_unique_id = f"{DOMAIN}_{token}_{description.key}"
+            self._attr_unique_id = f"{DOMAIN}_{plant_key}_{description.key}"
 
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, token)},
+            "identifiers": {(DOMAIN, plant_key)},
             "name": self._plant_name,
             "manufacturer": "Solar.web",
             "model": "Solar.web shared plant",

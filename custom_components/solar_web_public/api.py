@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from typing import Any
@@ -34,7 +35,7 @@ class SolarWebPublicClient:
     @property
     def plant_key(self) -> str:
         """Return a stable plant key."""
-        return self._token
+        return hashlib.sha256(self._token.encode()).hexdigest()[:16]
 
     @property
     def token(self) -> str:
@@ -180,8 +181,9 @@ class SolarWebPublicClient:
                 allow_redirects=True,
             ) as response:
                 if response.status >= 400:
+                    safe_url = self._redact_url(url)
                     raise SolarWebPublicApiError(
-                        f"Solar.web returned HTTP {response.status} for {url}"
+                        f"Solar.web returned HTTP {response.status} for {safe_url}"
                     )
 
                 content_type = response.headers.get("content-type", "")
@@ -211,8 +213,9 @@ class SolarWebPublicClient:
                 allow_redirects=True,
             ) as response:
                 if response.status >= 400:
+                    safe_url = self._redact_url(url)
                     raise SolarWebPublicApiError(
-                        f"Solar.web returned HTTP {response.status} for {url}"
+                        f"Solar.web returned HTTP {response.status} for {safe_url}"
                     )
 
                 text = await response.text()
@@ -223,8 +226,9 @@ class SolarWebPublicClient:
         try:
             return json.loads(text)
         except json.JSONDecodeError as err:
+            safe_url = self._redact_url(url)
             raise SolarWebPublicApiError(
-                f"Solar.web returned non JSON response from {url}: {text[:300]}"
+                f"Solar.web returned non JSON response from {safe_url}: {text[:300]}"
             ) from err
 
     def _parse_page(
