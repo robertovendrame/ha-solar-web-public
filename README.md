@@ -6,7 +6,6 @@ This integration does **not** require Solar.web username, password, token login,
 
 It works with the public display URL generated from a Solar.web account, for example:
 
-```text
 https://www.solarweb.com/PublicDisplay?token=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 Features
 No Solar.web login required
