@@ -1,11 +1,12 @@
 {
   "domain": "solar_web_public",
   "name": "Solar Web Public",
-  "codeowners": [],
+  "codeowners": ["@USERNAME"],
   "config_flow": true,
-  "documentation": "https://github.com/robertovendrame/ha-solar-web-public",
+  "documentation": "https://github.com/USERNAME/ha-solar-web-public",
+  "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/robertovendrame/ha-solar-web-public/issues",
+  "issue_tracker": "https://github.com/USERNAME/ha-solar-web-public/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

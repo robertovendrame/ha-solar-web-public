@@ -27,17 +27,56 @@
       "current_power": {
         "name": "Potenza attuale"
       },
-      "today_energy": {
-        "name": "Energia oggi"
+      "production_power": {
+        "name": "Potenza produzione"
       },
-      "total_energy": {
-        "name": "Energia totale"
+      "consumption_power": {
+        "name": "Potenza consumo"
+      },
+      "grid_power": {
+        "name": "Potenza rete"
+      },
+      "feed_in_power": {
+        "name": "Potenza immessa in rete"
+      },
+      "grid_import_power": {
+        "name": "Potenza prelevata dalla rete"
+      },
+      "battery_power": {
+        "name": "Potenza batteria"
       },
       "battery_soc": {
         "name": "Batteria"
       },
-      "grid_power": {
-        "name": "Potenza rete"
+      "today_energy": {
+        "name": "Energia oggi"
+      },
+      "month_energy": {
+        "name": "Energia mese"
+      },
+      "year_energy": {
+        "name": "Energia anno"
+      },
+      "total_energy": {
+        "name": "Energia totale"
+      },
+      "grid_export_energy_today": {
+        "name": "Energia immessa oggi"
+      },
+      "grid_import_energy_today": {
+        "name": "Energia prelevata oggi"
+      },
+      "today_earning": {
+        "name": "Guadagno oggi"
+      },
+      "month_earning": {
+        "name": "Guadagno mese"
+      },
+      "year_earning": {
+        "name": "Guadagno anno"
+      },
+      "total_earning": {
+        "name": "Guadagno totale"
       },
       "diagnostics": {
         "name": "Diagnostica"
