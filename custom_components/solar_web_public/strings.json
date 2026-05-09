@@ -1,0 +1,44 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solar Web Public",
+        "description": "Inserisci l'URL condiviso dell'impianto Solar.web.",
+        "data": {
+          "name": "Nome impianto",
+          "shared_url": "URL condiviso Solar.web",
+          "refresh_interval": "Intervallo aggiornamento in secondi"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile leggere l'URL Solar.web.",
+      "invalid_url": "URL Solar.web non valido o non riconosciuto."
+    },
+    "abort": {
+      "already_configured": "Questo impianto è già configurato."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "plant": {
+        "name": "Stato impianto"
+      },
+      "current_power": {
+        "name": "Potenza attuale"
+      },
+      "today_energy": {
+        "name": "Energia oggi"
+      },
+      "total_energy": {
+        "name": "Energia totale"
+      },
+      "battery_soc": {
+        "name": "Batteria"
+      },
+      "grid_power": {
+        "name": "Potenza rete"
+      }
+    }
+  }
+}
