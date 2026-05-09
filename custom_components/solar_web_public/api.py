@@ -274,7 +274,6 @@ class SolarWebPublicClient:
                 or "pv_system" in payload.lower()
             ),
             "script_count": len(script_sources),
-            "script_sources": script_sources[:30],
             "api_candidates": api_candidates[:60],
         }
 
@@ -771,14 +770,3 @@ class SolarWebPublicClient:
             return [f"list[{len(payload)}]"]
 
         return []
-
-    def _json_preview(self, payload: Any) -> str | None:
-        """Return short JSON preview."""
-
-        if payload is None:
-            return None
-
-        try:
-            return json.dumps(payload, ensure_ascii=False)[:3000]
-        except TypeError:
-            return str(payload)[:3000]
