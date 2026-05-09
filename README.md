@@ -162,9 +162,32 @@ Do not publish real public display tokens in screenshots, issues, examples, or d
 
 ## Development status
 
-Current version: `0.4.1`
+Current version: `0.4.2`
 
 Early but functional.
+
+## Changelog
+
+### v0.4.2 (2024-12-XX)
+- **FIX**: Added entity registry migration to fix duplicate entity names
+- **BREAKING**: Entity unique_ids changed from token-based to hash-based to prevent conflicts
+- **IMPROVEMENT**: Prevents _NUMERO suffixes in sensor names
+
+### v0.4.1 (2024-12-XX)
+- **FIX**: Entity naming issues causing _NUMERO suffixes
+- **BREAKING**: Entity unique_ids changed to use hashed plant keys instead of tokens
+
+### v0.4.0 (2024-12-XX)
+- **FEATURE**: Added translation keys for all sensors
+- **FEATURE**: Dynamic currency support for earnings
+- **IMPROVEMENT**: Removed duplicate icons
+- **SECURITY**: Improved privacy by hashing plant keys and redacting URLs in errors
+- **CLEANUP**: Removed unused code and functions
+
+### v0.3.0 (2024-XX-XX)
+- **FEATURE**: Added battery sensors (power, state of charge)
+- **FEATURE**: Added grid import/export sensors
+- **IMPROVEMENT**: Better error handling and logging
 
 ---
 
