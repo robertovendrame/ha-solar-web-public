@@ -48,12 +48,52 @@ SENSOR_DESCRIPTIONS: tuple[SolarWebSensorDescription, ...] = (
         data_key="current_power_w",
     ),
     SolarWebSensorDescription(
+        key="production_power",
+        name="Potenza produzione",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        data_key="production_w",
+    ),
+    SolarWebSensorDescription(
+        key="consumption_power",
+        name="Potenza consumo",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        data_key="consumption_w",
+    ),
+    SolarWebSensorDescription(
+        key="grid_power",
+        name="Potenza rete",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        data_key="grid_power_w",
+    ),
+    SolarWebSensorDescription(
         key="today_energy",
         name="Energia oggi",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
         data_key="today_energy_kwh",
+    ),
+    SolarWebSensorDescription(
+        key="month_energy",
+        name="Energia mese",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        data_key="month_energy_kwh",
+    ),
+    SolarWebSensorDescription(
+        key="year_energy",
+        name="Energia anno",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        data_key="year_energy_kwh",
     ),
     SolarWebSensorDescription(
         key="total_energy",
@@ -70,14 +110,6 @@ SENSOR_DESCRIPTIONS: tuple[SolarWebSensorDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         data_key="battery_soc",
-    ),
-    SolarWebSensorDescription(
-        key="grid_power",
-        name="Potenza rete",
-        device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement=UnitOfPower.WATT,
-        state_class=SensorStateClass.MEASUREMENT,
-        data_key="grid_power_w",
     ),
     SolarWebSensorDescription(
         key="diagnostics",
@@ -171,12 +203,7 @@ class SolarWebPublicSensor(
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return sensor attributes.
-
-        Important:
-        keep attributes also on diagnostics and main plant sensor,
-        like the original YAML/template test file.
-        """
+        """Return sensor attributes."""
 
         data = self.coordinator.data or {}
 
@@ -189,16 +216,26 @@ class SolarWebPublicSensor(
             "token": data.get("token"),
             "input_url": data.get("input_url"),
             "final_url": data.get("final_url"),
+            "pv_system_id": data.get("pv_system_id"),
+            "peak_power_wp": data.get("peak_power_wp"),
             "last_update": data.get("last_update"),
+            "chart_last_update": data.get("chart_last_update"),
             "current_power_w": data.get("current_power_w"),
+            "production_w": data.get("production_w"),
+            "consumption_w": data.get("consumption_w"),
+            "grid_power_w": data.get("grid_power_w"),
+            "feed_in_w": data.get("feed_in_w"),
+            "energy_from_grid_w": data.get("energy_from_grid_w"),
             "today_energy_kwh": data.get("today_energy_kwh"),
+            "month_energy_kwh": data.get("month_energy_kwh"),
+            "year_energy_kwh": data.get("year_energy_kwh"),
             "total_energy_kwh": data.get("total_energy_kwh"),
             "battery_soc": data.get("battery_soc"),
-            "grid_power_w": data.get("grid_power_w"),
+            "today_earning": data.get("today_earning"),
+            "month_earning": data.get("month_earning"),
+            "year_earning": data.get("year_earning"),
+            "total_earning": data.get("total_earning"),
         }
-
-        if self.entity_description.key == "plant":
-            return base_attributes
 
         if self.entity_description.key == "diagnostics":
             return {
@@ -212,6 +249,21 @@ class SolarWebPublicSensor(
                 "script_count": data.get("script_count"),
                 "script_sources": data.get("script_sources"),
                 "api_candidates": data.get("api_candidates"),
+                "actual_data_url": data.get("actual_data_url"),
+                "actual_data_available": data.get("actual_data_available"),
+                "actual_data_error": data.get("actual_data_error"),
+                "actual_data_debug_keys": data.get("actual_data_debug_keys"),
+                "actual_data_debug_preview": data.get("actual_data_debug_preview"),
+                "productions_url": data.get("productions_url"),
+                "productions_available": data.get("productions_available"),
+                "productions_error": data.get("productions_error"),
+                "productions_debug_keys": data.get("productions_debug_keys"),
+                "productions_debug_preview": data.get("productions_debug_preview"),
+                "chart_url": data.get("chart_url"),
+                "chart_available": data.get("chart_available"),
+                "chart_error": data.get("chart_error"),
+                "chart_debug_keys": data.get("chart_debug_keys"),
+                "chart_debug_preview": data.get("chart_debug_preview"),
                 "debug_preview": data.get("debug_preview"),
             }
 

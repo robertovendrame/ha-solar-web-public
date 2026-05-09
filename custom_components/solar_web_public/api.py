@@ -47,6 +47,22 @@ class SolarWebPublicClient:
         return f"{self.BASE_URL}/PublicDisplay/PvSystem?token={self.token}"
 
     @property
+    def actual_data_url(self) -> str:
+        """Return Solar.web public actual-data URL."""
+        return (
+            f"{self.BASE_URL}/ActualData/GetCompareDataForPublicDisplay"
+            f"?PublicDisplayToken={self.token}"
+        )
+
+    @property
+    def productions_url(self) -> str:
+        """Return Solar.web productions and earnings URL."""
+        return (
+            f"{self.BASE_URL}/PvSystems/GetPvSystemProductionsAndEarningsForPublicDisplay"
+            f"?token={self.token}"
+        )
+
+    @property
     def chart_url(self) -> str:
         """Return Solar.web public chart URL."""
         return (
@@ -90,25 +106,57 @@ class SolarWebPublicClient:
             final_url=final_url,
         )
 
-        chart_payload: dict[str, Any] | list[Any] | None = None
-        chart_error: str | None = None
+        actual_payload, actual_error = await self._safe_get_json(self.actual_data_url)
+        productions_payload, productions_error = await self._safe_get_json(
+            self.productions_url
+        )
+        chart_payload, chart_error = await self._safe_get_json(self.chart_url)
 
-        try:
-            chart_payload = await self._async_get_json(self.chart_url)
-        except SolarWebPublicApiError as err:
-            chart_error = str(err)
-
+        actual_data = self._parse_actual_payload(actual_payload)
+        production_data = self._parse_productions_payload(productions_payload)
         chart_data = self._parse_chart_payload(chart_payload)
 
-        return {
+        merged = {
             **page_data,
             **chart_data,
-            "chart_url": self.chart_url,
-            "chart_error": chart_error,
-            "chart_available": chart_payload is not None,
-            "chart_debug_keys": self._debug_keys(chart_payload),
-            "chart_debug_preview": self._json_preview(chart_payload),
+            **production_data,
+            **actual_data,
         }
+
+        merged.update(
+            {
+                "actual_data_url": self.actual_data_url,
+                "actual_data_available": actual_payload is not None,
+                "actual_data_error": actual_error,
+                "actual_data_debug_keys": self._debug_keys(actual_payload),
+                "actual_data_debug_preview": self._json_preview(actual_payload),
+                "productions_url": self.productions_url,
+                "productions_available": productions_payload is not None,
+                "productions_error": productions_error,
+                "productions_debug_keys": self._debug_keys(productions_payload),
+                "productions_debug_preview": self._json_preview(productions_payload),
+                "chart_url": self.chart_url,
+                "chart_available": chart_payload is not None,
+                "chart_error": chart_error,
+                "chart_debug_keys": self._debug_keys(chart_payload),
+                "chart_debug_preview": self._json_preview(chart_payload),
+            }
+        )
+
+        return merged
+
+    async def _safe_get_json(
+        self,
+        url: str,
+    ) -> tuple[dict[str, Any] | list[Any] | None, str | None]:
+        """Fetch JSON without failing the whole update."""
+
+        try:
+            payload = await self._async_get_json(url)
+        except SolarWebPublicApiError as err:
+            return None, str(err)
+
+        return payload, None
 
     async def _async_get_text(
         self,
@@ -174,7 +222,7 @@ class SolarWebPublicClient:
             return json.loads(text)
         except json.JSONDecodeError as err:
             raise SolarWebPublicApiError(
-                f"Solar.web returned non JSON response from {url}: {text[:200]}"
+                f"Solar.web returned non JSON response from {url}: {text[:300]}"
             ) from err
 
     def _parse_page(
@@ -189,6 +237,7 @@ class SolarWebPublicClient:
         location = self._extract_location(payload)
         page_title = self._extract_title(payload)
         pv_system_id = self._extract_pv_system_id(payload)
+        peak_power_wp = self._extract_peak_power(payload)
         script_sources = self._extract_script_sources(payload)
         api_candidates = self._extract_api_candidates(payload)
 
@@ -202,6 +251,7 @@ class SolarWebPublicClient:
             "location": location,
             "page_title": page_title,
             "pv_system_id": pv_system_id,
+            "peak_power_wp": peak_power_wp,
             "content_type": content_type,
             "payload_length": len(payload),
             "has_api": "/api/" in payload.lower(),
@@ -221,31 +271,24 @@ class SolarWebPublicClient:
             ),
             "script_count": len(script_sources),
             "script_sources": script_sources[:30],
-            "api_candidates": api_candidates[:50],
+            "api_candidates": api_candidates[:60],
             "debug_preview": self._clean_preview(payload),
         }
 
-    def _parse_chart_payload(
+    def _parse_actual_payload(
         self,
         payload: dict[str, Any] | list[Any] | None,
     ) -> dict[str, Any]:
-        """Parse chart JSON payload.
-
-        This parser is intentionally defensive because Solar.web can change
-        field names. It scans the whole JSON tree and extracts the most likely
-        numeric values.
-        """
+        """Parse actual live data endpoint."""
 
         result: dict[str, Any] = {
             "current_power_w": None,
-            "today_energy_kwh": None,
-            "total_energy_kwh": None,
-            "battery_soc": None,
-            "grid_power_w": None,
             "production_w": None,
             "consumption_w": None,
+            "grid_power_w": None,
             "feed_in_w": None,
             "energy_from_grid_w": None,
+            "battery_soc": None,
             "last_update": None,
         }
 
@@ -258,27 +301,35 @@ class SolarWebPublicClient:
             flat,
             preferred_keys=[
                 "currentpower",
-                "current_power",
-                "powercurrent",
-                "pac",
-                "p_ac",
-                "productionpower",
-                "production_power",
+                "actualpower",
+                "currentpvpower",
                 "pvpower",
-                "pv_power",
-                "power",
+                "pac",
+                "powerac",
+                "productionpower",
+                "powerproduction",
+                "pvanlageleistung",
+                "leistung",
             ],
             deny_keys=[
-                "max",
-                "min",
+                "chart",
                 "axis",
-                "scale",
+                "series",
+                "index",
+                "count",
+                "visible",
+                "success",
+                "error",
+                "status",
+                "percentage",
+                "percent",
+                "relative",
+                "peak",
                 "nominal",
                 "installed",
-                "weather",
-                "forecast",
-                "expected",
             ],
+            min_value=0,
+            max_value=200000,
         )
 
         result["production_w"] = self._find_number(
@@ -286,9 +337,9 @@ class SolarWebPublicClient:
             preferred_keys=[
                 "production",
                 "pvproduction",
-                "pv_power",
                 "pvpower",
-                "produzione",
+                "currentproduction",
+                "actualproduction",
             ],
             deny_keys=[
                 "today",
@@ -297,9 +348,14 @@ class SolarWebPublicClient:
                 "total",
                 "energy",
                 "earning",
-                "forecast",
-                "expected",
+                "money",
+                "currency",
+                "chart",
+                "axis",
+                "series",
             ],
+            min_value=0,
+            max_value=200000,
         )
 
         result["consumption_w"] = self._find_number(
@@ -307,8 +363,8 @@ class SolarWebPublicClient:
             preferred_keys=[
                 "consumption",
                 "load",
-                "verbrauch",
-                "consumo",
+                "currentconsumption",
+                "actualconsumption",
             ],
             deny_keys=[
                 "today",
@@ -316,22 +372,28 @@ class SolarWebPublicClient:
                 "year",
                 "total",
                 "energy",
-                "forecast",
-                "expected",
+                "earning",
+                "money",
+                "currency",
+                "chart",
+                "axis",
+                "series",
             ],
+            min_value=0,
+            max_value=200000,
         )
 
         result["grid_power_w"] = self._find_number(
             flat,
             preferred_keys=[
-                "grid",
                 "gridpower",
-                "grid_power",
+                "grid",
                 "fromgrid",
-                "to_grid",
                 "togrid",
                 "feedin",
-                "feed_in",
+                "feedinpower",
+                "feedpower",
+                "powergrid",
             ],
             deny_keys=[
                 "today",
@@ -340,58 +402,24 @@ class SolarWebPublicClient:
                 "total",
                 "energy",
                 "earning",
-            ],
-        )
-
-        result["today_energy_kwh"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "today",
-                "day",
-                "energytoday",
-                "energy_today",
-                "productiontoday",
-                "production_today",
-                "produzionegiorno",
-            ],
-            deny_keys=[
-                "earning",
                 "money",
                 "currency",
-                "euro",
-                "eur",
+                "chart",
+                "axis",
+                "series",
             ],
-            convert_wh_to_kwh=True,
-        )
-
-        result["total_energy_kwh"] = self._find_number(
-            flat,
-            preferred_keys=[
-                "total",
-                "overall",
-                "lifetime",
-                "energytotal",
-                "energy_total",
-                "productiontotal",
-                "production_total",
-            ],
-            deny_keys=[
-                "earning",
-                "money",
-                "currency",
-                "euro",
-                "eur",
-            ],
-            convert_wh_to_kwh=True,
+            min_value=-200000,
+            max_value=200000,
         )
 
         result["battery_soc"] = self._find_number(
             flat,
             preferred_keys=[
-                "battery",
+                "batterysoc",
                 "soc",
                 "stateofcharge",
-                "state_of_charge",
+                "stateofchargepercentage",
+                "batterypercentage",
             ],
             deny_keys=[
                 "power",
@@ -399,14 +427,217 @@ class SolarWebPublicClient:
                 "voltage",
                 "current",
             ],
+            min_value=0,
+            max_value=100,
         )
 
         result["last_update"] = self._find_string(
             flat,
             preferred_keys=[
                 "lastupdate",
-                "last_update",
+                "lastupdated",
                 "timestamp",
+                "datetime",
+                "time",
+                "date",
+            ],
+        )
+
+        return result
+
+    def _parse_productions_payload(
+        self,
+        payload: dict[str, Any] | list[Any] | None,
+    ) -> dict[str, Any]:
+        """Parse productions and earnings endpoint."""
+
+        result: dict[str, Any] = {
+            "today_energy_kwh": None,
+            "month_energy_kwh": None,
+            "year_energy_kwh": None,
+            "total_energy_kwh": None,
+            "today_earning": None,
+            "month_earning": None,
+            "year_earning": None,
+            "total_earning": None,
+        }
+
+        if payload is None:
+            return result
+
+        flat = self._flatten_json(payload)
+
+        result["today_energy_kwh"] = self._find_number(
+            flat,
+            preferred_keys=[
+                "productiontoday",
+                "todayproduction",
+                "energytoday",
+                "todayenergy",
+                "dayproduction",
+                "productionday",
+                "produzioneoggi",
+                "oggi",
+            ],
+            deny_keys=[
+                "earning",
+                "earnings",
+                "money",
+                "currency",
+                "eur",
+                "euro",
+                "co2",
+            ],
+            min_value=0,
+            max_value=1000000,
+            convert_wh_to_kwh=True,
+        )
+
+        result["month_energy_kwh"] = self._find_number(
+            flat,
+            preferred_keys=[
+                "productionmonth",
+                "monthproduction",
+                "energymonth",
+                "monthenergy",
+            ],
+            deny_keys=[
+                "earning",
+                "earnings",
+                "money",
+                "currency",
+                "eur",
+                "euro",
+                "co2",
+            ],
+            min_value=0,
+            max_value=10000000,
+            convert_wh_to_kwh=True,
+        )
+
+        result["year_energy_kwh"] = self._find_number(
+            flat,
+            preferred_keys=[
+                "productionyear",
+                "yearproduction",
+                "energyyear",
+                "yearenergy",
+            ],
+            deny_keys=[
+                "earning",
+                "earnings",
+                "money",
+                "currency",
+                "eur",
+                "euro",
+                "co2",
+            ],
+            min_value=0,
+            max_value=100000000,
+            convert_wh_to_kwh=True,
+        )
+
+        result["total_energy_kwh"] = self._find_number(
+            flat,
+            preferred_keys=[
+                "productiontotal",
+                "totalproduction",
+                "energytotal",
+                "totalenergy",
+                "overallproduction",
+                "lifetimeproduction",
+            ],
+            deny_keys=[
+                "earning",
+                "earnings",
+                "money",
+                "currency",
+                "eur",
+                "euro",
+                "co2",
+            ],
+            min_value=0,
+            max_value=1000000000,
+            convert_wh_to_kwh=True,
+        )
+
+        result["today_earning"] = self._find_number(
+            flat,
+            preferred_keys=[
+                "earningtoday",
+                "todayearning",
+                "savingtoday",
+                "todaysaving",
+            ],
+            min_value=0,
+            max_value=1000000,
+        )
+
+        result["month_earning"] = self._find_number(
+            flat,
+            preferred_keys=[
+                "earningmonth",
+                "monthearning",
+                "savingmonth",
+                "monthsaving",
+            ],
+            min_value=0,
+            max_value=1000000,
+        )
+
+        result["year_earning"] = self._find_number(
+            flat,
+            preferred_keys=[
+                "earningyear",
+                "yearearning",
+                "savingyear",
+                "yearsaving",
+            ],
+            min_value=0,
+            max_value=1000000,
+        )
+
+        result["total_earning"] = self._find_number(
+            flat,
+            preferred_keys=[
+                "earningtotal",
+                "totalearning",
+                "savingtotal",
+                "totalsaving",
+            ],
+            min_value=0,
+            max_value=10000000,
+        )
+
+        return result
+
+    def _parse_chart_payload(
+        self,
+        payload: dict[str, Any] | list[Any] | None,
+    ) -> dict[str, Any]:
+        """Parse chart endpoint only as fallback.
+
+        Avoid using generic chart numbers as live sensors, because the chart
+        contains hours, indexes and plotted series that can be mistaken for
+        power values.
+        """
+
+        result: dict[str, Any] = {
+            "chart_last_update": None,
+        }
+
+        if payload is None:
+            return result
+
+        flat = self._flatten_json(payload)
+
+        result["chart_last_update"] = self._find_string(
+            flat,
+            preferred_keys=[
+                "lastupdate",
+                "lastupdated",
+                "timestamp",
+                "datetime",
                 "time",
                 "date",
             ],
@@ -443,6 +674,8 @@ class SolarWebPublicClient:
         flat: list[tuple[str, Any]],
         preferred_keys: list[str],
         deny_keys: list[str] | None = None,
+        min_value: float | None = None,
+        max_value: float | None = None,
         convert_wh_to_kwh: bool = False,
     ) -> float | int | None:
         """Find a likely numeric value by key name."""
@@ -459,7 +692,10 @@ class SolarWebPublicClient:
 
             score = 0
             for preferred in preferred_keys:
-                if preferred in normalized_key:
+                normalized_preferred = self._normalize_key(preferred)
+                if normalized_preferred in normalized_key:
+                    score += 20
+                elif normalized_key.endswith(normalized_preferred):
                     score += 10
 
             if score <= 0:
@@ -467,6 +703,12 @@ class SolarWebPublicClient:
 
             number = self._to_number(value)
             if number is None:
+                continue
+
+            if min_value is not None and number < min_value:
+                continue
+
+            if max_value is not None and number > max_value:
                 continue
 
             if convert_wh_to_kwh and self._looks_like_wh(normalized_key, number):
@@ -495,7 +737,10 @@ class SolarWebPublicClient:
         for key, value in flat:
             normalized_key = self._normalize_key(key)
 
-            if not any(preferred in normalized_key for preferred in preferred_keys):
+            if not any(
+                self._normalize_key(preferred) in normalized_key
+                for preferred in preferred_keys
+            ):
                 continue
 
             if isinstance(value, str) and value.strip():
@@ -520,13 +765,20 @@ class SolarWebPublicClient:
         if isinstance(value, bool):
             return None
 
-        if isinstance(value, int | float):
+        if isinstance(value, (int, float)):
             return float(value)
 
         if isinstance(value, str):
             cleaned = value.strip()
-            cleaned = cleaned.replace(".", "")
-            cleaned = cleaned.replace(",", ".")
+            cleaned = cleaned.replace("\u00a0", "")
+            cleaned = cleaned.replace(" ", "")
+
+            if "," in cleaned and "." in cleaned:
+                cleaned = cleaned.replace(".", "")
+                cleaned = cleaned.replace(",", ".")
+            elif "," in cleaned:
+                cleaned = cleaned.replace(",", ".")
+
             cleaned = re.sub(r"[^0-9.\-]", "", cleaned)
 
             if cleaned in ["", "-", ".", "-."]:
@@ -561,26 +813,9 @@ class SolarWebPublicClient:
     def _extract_plant_name(self, payload: str) -> str | None:
         """Extract plant name from public page."""
 
-        # Specific Solar.web public header:
-        # <div class="pd-header-text">SOLAR.WEB</div>
-        # <div class="pd-header-text">Bricchese Manuel</div>
         match = re.search(
             r'<div[^>]*class=["\'][^"\']*pd-header-text[^"\']*["\'][^>]*>\s*SOLAR\.WEB\s*</div>\s*'
             r'<div[^>]*class=["\'][^"\']*pd-header-text[^"\']*["\'][^>]*>\s*(.*?)\s*</div>',
-            payload,
-            re.IGNORECASE | re.DOTALL,
-        )
-
-        if match:
-            value = self._clean_text(match.group(1))
-            if value:
-                return value
-
-        # Fallback: widget title near plant image.
-        match = re.search(
-            r'<div[^>]*class=["\'][^"\']*pd-widget-title[^"\']*["\'][^>]*>\s*([^<]+?)\s*</div>\s*'
-            r'<div[^>]*class=["\'][^"\']*pd-widget-body[^"\']*["\'][^>]*>\s*'
-            r'<div[^>]*data-pvsystemid=',
             payload,
             re.IGNORECASE | re.DOTALL,
         )
@@ -599,8 +834,6 @@ class SolarWebPublicClient:
     def _extract_location(self, payload: str) -> str | None:
         """Extract location from public page."""
 
-        # Specific Solar.web public weather widget title:
-        # <div class="pd-widget-title mod-left">Portogruaro</div>
         match = re.search(
             r'<div[^>]*class=["\'][^"\']*pd-widget-title[^"\']*mod-left[^"\']*["\'][^>]*>\s*(.*?)\s*</div>',
             payload,
@@ -628,6 +861,20 @@ class SolarWebPublicClient:
 
         return None
 
+    def _extract_peak_power(self, payload: str) -> int | None:
+        """Extract peak power from inline config."""
+
+        match = re.search(
+            r"peakPower\s*:\s*([0-9]+)",
+            payload,
+            re.IGNORECASE,
+        )
+
+        if match:
+            return int(match.group(1))
+
+        return None
+
     def _extract_script_sources(self, payload: str) -> list[str]:
         """Extract script src links from HTML."""
 
@@ -645,15 +892,9 @@ class SolarWebPublicClient:
         candidates: set[str] = set()
 
         patterns = [
-            r"[\"']([^\"']*/api/[^\"']+)[\"']",
-            r"[\"']([^\"']*PublicDisplay[^\"']+)[\"']",
-            r"[\"']([^\"']*PvSystem[^\"']+)[\"']",
-            r"[\"']([^\"']*PvSystems[^\"']+)[\"']",
-            r"[\"']([^\"']*Chart[^\"']+)[\"']",
-            r"[\"']([^\"']*Energy[^\"']+)[\"']",
-            r"[\"']([^\"']*Power[^\"']+)[\"']",
-            r"[\"']([^\"']*Get[^\"']+)[\"']",
+            r"(\/ActualData\/GetCompareDataForPublicDisplay\?PublicDisplayToken=[a-fA-F0-9-]{36})",
             r"(\/Chart\/GetWidgetChartForPublicDisplay\?publicDisplayToken=[a-fA-F0-9-]{36})",
+            r"(\/PvSystems\/GetPvSystemProductionsAndEarningsForPublicDisplay\?token=[a-fA-F0-9-]{36})",
             r"(\/PvSystems\/GetWeatherWidgetDataForPublicDisplay\?publicDisplayToken=[a-fA-F0-9-]{36})",
             r"(\/PvSystemImages\/GetUrlForPublicDisplayToken\?token=[a-fA-F0-9-]{36})",
         ]
@@ -661,10 +902,11 @@ class SolarWebPublicClient:
         for pattern in patterns:
             for match in re.findall(pattern, payload, re.IGNORECASE):
                 cleaned = match.strip()
-                if cleaned and len(cleaned) < 500:
+                if cleaned:
                     candidates.add(self._normalize_url(cleaned))
 
-        # Force known public endpoints found in the Solar.web page.
+        candidates.add(self.actual_data_url)
+        candidates.add(self.productions_url)
         candidates.add(self.chart_url)
         candidates.add(self.weather_url)
         candidates.add(
@@ -722,6 +964,7 @@ class SolarWebPublicClient:
         value = value.replace("&ograve;", "ò")
         value = value.replace("&ugrave;", "ù")
         value = value.replace("&igrave;", "ì")
+        value = value.replace("&copy;", "©")
 
         return value.strip()
 
@@ -729,7 +972,7 @@ class SolarWebPublicClient:
         """Return top-level debug keys."""
 
         if isinstance(payload, dict):
-            return list(payload.keys())[:50]
+            return list(payload.keys())[:80]
 
         if isinstance(payload, list):
             return [f"list[{len(payload)}]"]
@@ -743,6 +986,6 @@ class SolarWebPublicClient:
             return None
 
         try:
-            return json.dumps(payload, ensure_ascii=False)[:2000]
+            return json.dumps(payload, ensure_ascii=False)[:3000]
         except TypeError:
-            return str(payload)[:2000]
+            return str(payload)[:3000]
