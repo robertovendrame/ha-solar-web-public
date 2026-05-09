@@ -13,11 +13,13 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    CURRENCY_EURO,
     PERCENTAGE,
     UnitOfEnergy,
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -30,6 +32,7 @@ class SolarWebSensorDescription(SensorEntityDescription):
     """Solar Web sensor description."""
 
     data_key: str | None = None
+    copy_all_attributes: bool = False
 
 
 SENSOR_DESCRIPTIONS: tuple[SolarWebSensorDescription, ...] = (
@@ -38,6 +41,7 @@ SENSOR_DESCRIPTIONS: tuple[SolarWebSensorDescription, ...] = (
         name=None,
         icon="mdi:solar-power-variant",
         data_key=None,
+        copy_all_attributes=True,
     ),
     SolarWebSensorDescription(
         key="current_power",
@@ -96,6 +100,14 @@ SENSOR_DESCRIPTIONS: tuple[SolarWebSensorDescription, ...] = (
         data_key="battery_power_w",
     ),
     SolarWebSensorDescription(
+        key="battery_soc",
+        name="Batteria",
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        data_key="battery_soc",
+    ),
+    SolarWebSensorDescription(
         key="today_energy",
         name="Energia oggi",
         device_class=SensorDeviceClass.ENERGY,
@@ -124,21 +136,62 @@ SENSOR_DESCRIPTIONS: tuple[SolarWebSensorDescription, ...] = (
         name="Energia totale",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         data_key="total_energy_kwh",
     ),
     SolarWebSensorDescription(
-        key="battery_soc",
-        name="Batteria",
-        device_class=SensorDeviceClass.BATTERY,
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        data_key="battery_soc",
+        key="grid_export_energy_today",
+        name="Energia immessa oggi",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        data_key="chart_to_grid_kwh",
+    ),
+    SolarWebSensorDescription(
+        key="grid_import_energy_today",
+        name="Energia prelevata oggi",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        data_key="chart_from_grid_kwh",
+    ),
+    SolarWebSensorDescription(
+        key="today_earning",
+        name="Guadagno oggi",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement=CURRENCY_EURO,
+        state_class=SensorStateClass.TOTAL,
+        data_key="today_earning",
+    ),
+    SolarWebSensorDescription(
+        key="month_earning",
+        name="Guadagno mese",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement=CURRENCY_EURO,
+        state_class=SensorStateClass.TOTAL,
+        data_key="month_earning",
+    ),
+    SolarWebSensorDescription(
+        key="year_earning",
+        name="Guadagno anno",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement=CURRENCY_EURO,
+        state_class=SensorStateClass.TOTAL,
+        data_key="year_earning",
+    ),
+    SolarWebSensorDescription(
+        key="total_earning",
+        name="Guadagno totale",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement=CURRENCY_EURO,
+        state_class=SensorStateClass.TOTAL,
+        data_key="total_earning",
     ),
     SolarWebSensorDescription(
         key="diagnostics",
         name="Diagnostica",
         icon="mdi:bug-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
         data_key=None,
     ),
 )
@@ -213,12 +266,11 @@ class SolarWebPublicSensor(
             return data.get("status", "unknown")
 
         if self.entity_description.key == "diagnostics":
-            payload_length = data.get("payload_length")
-            if payload_length is None:
-                return "unknown"
-            if int(payload_length) > 0:
+            if data.get("actual_data_available") and data.get("productions_available"):
                 return "ok"
-            return "empty"
+            if data.get("payload_length", 0) > 0:
+                return "partial"
+            return "unknown"
 
         if self.entity_description.data_key is None:
             return None
@@ -226,12 +278,34 @@ class SolarWebPublicSensor(
         return data.get(self.entity_description.data_key)
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return sensor attributes."""
 
         data = self.coordinator.data or {}
 
-        base_attributes: dict[str, Any] = {
+        if self.entity_description.key == "diagnostics":
+            return self._diagnostic_attributes(data)
+
+        if self.entity_description.key == "plant":
+            return self._plant_attributes(data)
+
+        return self._minimal_attributes(data)
+
+    def _minimal_attributes(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Return minimal attributes for numeric sensors."""
+
+        return {
+            "plant_name": data.get("plant_name"),
+            "location": data.get("location"),
+            "status": data.get("status"),
+            "is_online": data.get("is_online"),
+            "pv_system_id": data.get("pv_system_id"),
+        }
+
+    def _plant_attributes(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Return rich plant attributes."""
+
+        return {
             "configured_name": self._plant_name,
             "plant_name": data.get("plant_name"),
             "location": data.get("location"),
@@ -239,13 +313,8 @@ class SolarWebPublicSensor(
             "status": data.get("status"),
             "is_online": data.get("is_online"),
             "all_online": data.get("all_online"),
-            "token": data.get("token"),
-            "input_url": data.get("input_url"),
-            "final_url": data.get("final_url"),
             "pv_system_id": data.get("pv_system_id"),
             "peak_power_wp": data.get("peak_power_wp"),
-            "last_update": data.get("last_update"),
-            "chart_last_update": data.get("chart_last_update"),
             "current_power_w": data.get("current_power_w"),
             "production_w": data.get("production_w"),
             "consumption_w": data.get("consumption_w"),
@@ -268,39 +337,40 @@ class SolarWebPublicSensor(
             "year_earning": data.get("year_earning"),
             "total_earning": data.get("total_earning"),
             "earning_currency": data.get("earning_currency"),
+            "grid_export_energy_today_kwh": data.get("chart_to_grid_kwh"),
+            "grid_import_energy_today_kwh": data.get("chart_from_grid_kwh"),
+            "token": data.get("token"),
+            "input_url": data.get("input_url"),
+            "final_url": data.get("final_url"),
+        }
+
+    def _diagnostic_attributes(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Return diagnostic attributes."""
+
+        return {
+            **self._plant_attributes(data),
+            "content_type": data.get("content_type"),
+            "payload_length": data.get("payload_length"),
+            "has_public_display": data.get("has_public_display"),
+            "has_current_power": data.get("has_current_power"),
+            "has_pv_system": data.get("has_pv_system"),
+            "script_count": data.get("script_count"),
+            "api_candidates": data.get("api_candidates"),
+            "actual_data_url": data.get("actual_data_url"),
+            "actual_data_available": data.get("actual_data_available"),
+            "actual_data_error": data.get("actual_data_error"),
+            "actual_data_debug_keys": data.get("actual_data_debug_keys"),
+            "actual_data_debug_preview": data.get("actual_data_debug_preview"),
+            "productions_url": data.get("productions_url"),
+            "productions_available": data.get("productions_available"),
+            "productions_error": data.get("productions_error"),
+            "productions_debug_keys": data.get("productions_debug_keys"),
+            "productions_debug_preview": data.get("productions_debug_preview"),
+            "chart_url": data.get("chart_url"),
+            "chart_available": data.get("chart_available"),
+            "chart_error": data.get("chart_error"),
+            "chart_debug_keys": data.get("chart_debug_keys"),
             "chart_has_meter": data.get("chart_has_meter"),
             "chart_to_grid_kwh": data.get("chart_to_grid_kwh"),
             "chart_from_grid_kwh": data.get("chart_from_grid_kwh"),
         }
-
-        if self.entity_description.key == "diagnostics":
-            return {
-                **base_attributes,
-                "content_type": data.get("content_type"),
-                "payload_length": data.get("payload_length"),
-                "has_api": data.get("has_api"),
-                "has_public_display": data.get("has_public_display"),
-                "has_current_power": data.get("has_current_power"),
-                "has_pv_system": data.get("has_pv_system"),
-                "script_count": data.get("script_count"),
-                "script_sources": data.get("script_sources"),
-                "api_candidates": data.get("api_candidates"),
-                "actual_data_url": data.get("actual_data_url"),
-                "actual_data_available": data.get("actual_data_available"),
-                "actual_data_error": data.get("actual_data_error"),
-                "actual_data_debug_keys": data.get("actual_data_debug_keys"),
-                "actual_data_debug_preview": data.get("actual_data_debug_preview"),
-                "productions_url": data.get("productions_url"),
-                "productions_available": data.get("productions_available"),
-                "productions_error": data.get("productions_error"),
-                "productions_debug_keys": data.get("productions_debug_keys"),
-                "productions_debug_preview": data.get("productions_debug_preview"),
-                "chart_url": data.get("chart_url"),
-                "chart_available": data.get("chart_available"),
-                "chart_error": data.get("chart_error"),
-                "chart_debug_keys": data.get("chart_debug_keys"),
-                "chart_debug_preview": data.get("chart_debug_preview"),
-                "debug_preview": data.get("debug_preview"),
-            }
-
-        return base_attributes
