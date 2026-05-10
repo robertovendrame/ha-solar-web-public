@@ -11,6 +11,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import SolarWebInvalidUrlError, SolarWebPublicApiError, SolarWebPublicClient
 from .const import (
     ALL_SENSOR_KEYS,
+    CONF_ENABLED_SENSOR_GROUPS,
     CONF_ENABLED_SENSORS,
     CONF_NAME,
     CONF_REFRESH_INTERVAL,
@@ -18,6 +19,8 @@ from .const import (
     DEFAULT_ENABLED_SENSOR_KEYS,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
+    SENSOR_GROUP_LABELS,
+    SENSOR_GROUPS,
     SENSOR_LABELS,
 )
 
@@ -34,10 +37,43 @@ def _sensor_options() -> list[dict[str, str]]:
     ]
 
 
+def _sensor_group_options() -> list[dict[str, str]]:
+    """Return selectable sensor group options."""
+
+    return [
+        {
+            "value": group_key,
+            "label": SENSOR_GROUP_LABELS[group_key],
+        }
+        for group_key in SENSOR_GROUPS
+    ]
+
+
+def _sensors_from_groups(group_keys: list[str]) -> list[str]:
+    """Return sensor keys enabled by selected groups."""
+
+    sensors: list[str] = []
+
+    for group_key in group_keys:
+        for sensor_key in SENSOR_GROUPS.get(group_key, []):
+            if sensor_key not in sensors:
+                sensors.append(sensor_key)
+
+    if not sensors:
+        sensors = DEFAULT_ENABLED_SENSOR_KEYS.copy()
+
+    return sensors
+
+
 class SolarWebPublicConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Solar Web Public."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        """Initialize config flow."""
+
+        self._user_input: dict = {}
 
     @staticmethod
     def async_get_options_flow(
@@ -72,27 +108,8 @@ class SolarWebPublicConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(client.plant_key)
                 self._abort_if_unique_id_configured()
 
-                return self.async_create_entry(
-                    title=user_input[CONF_NAME],
-                    data={
-                        CONF_NAME: user_input[CONF_NAME],
-                        CONF_SHARED_URL: user_input[CONF_SHARED_URL],
-                        CONF_REFRESH_INTERVAL: user_input.get(
-                            CONF_REFRESH_INTERVAL,
-                            DEFAULT_REFRESH_INTERVAL,
-                        ),
-                    },
-                    options={
-                        CONF_REFRESH_INTERVAL: user_input.get(
-                            CONF_REFRESH_INTERVAL,
-                            DEFAULT_REFRESH_INTERVAL,
-                        ),
-                        CONF_ENABLED_SENSORS: user_input.get(
-                            CONF_ENABLED_SENSORS,
-                            DEFAULT_ENABLED_SENSOR_KEYS,
-                        ),
-                    },
-                )
+                self._user_input = user_input
+                return await self.async_step_sensors()
 
         schema = vol.Schema(
             {
@@ -111,11 +128,11 @@ class SolarWebPublicConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 ),
                 vol.Optional(
-                    CONF_ENABLED_SENSORS,
-                    default=DEFAULT_ENABLED_SENSOR_KEYS,
+                    CONF_ENABLED_SENSOR_GROUPS,
+                    default=[],
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=_sensor_options(),
+                        options=_sensor_group_options(),
                         multiple=True,
                         mode=selector.SelectSelectorMode.LIST,
                     )
@@ -129,7 +146,60 @@ class SolarWebPublicConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_sensors(self, user_input=None):
+        """Handle individual sensor selection."""
 
+        selected_groups = self._user_input.get(CONF_ENABLED_SENSOR_GROUPS, [])
+        default_sensors = _sensors_from_groups(selected_groups)
+
+        if user_input is not None:
+            enabled_sensors = user_input.get(
+                CONF_ENABLED_SENSORS,
+                default_sensors,
+            )
+
+            if not enabled_sensors:
+                enabled_sensors = [ALL_SENSOR_KEYS[0]]
+
+            return self.async_create_entry(
+                title=self._user_input[CONF_NAME],
+                data={
+                    CONF_NAME: self._user_input[CONF_NAME],
+                    CONF_SHARED_URL: self._user_input[CONF_SHARED_URL],
+                    CONF_REFRESH_INTERVAL: self._user_input.get(
+                        CONF_REFRESH_INTERVAL,
+                        DEFAULT_REFRESH_INTERVAL,
+                    ),
+                },
+                options={
+                    CONF_REFRESH_INTERVAL: self._user_input.get(
+                        CONF_REFRESH_INTERVAL,
+                        DEFAULT_REFRESH_INTERVAL,
+                    ),
+                    CONF_ENABLED_SENSOR_GROUPS: selected_groups,
+                    CONF_ENABLED_SENSORS: enabled_sensors,
+                },
+            )
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_ENABLED_SENSORS,
+                    default=default_sensors,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=_sensor_options(),
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="sensors",
+            data_schema=schema,
+        )
 class SolarWebPublicOptionsFlow(config_entries.OptionsFlow):
     """Handle Solar Web Public options."""
 
@@ -137,29 +207,14 @@ class SolarWebPublicOptionsFlow(config_entries.OptionsFlow):
         """Initialize options flow."""
 
         self._config_entry = config_entry
+        self._user_input: dict = {}
 
     async def async_step_init(self, user_input=None):
         """Manage integration options."""
 
         if user_input is not None:
-            enabled_sensors = user_input.get(
-                CONF_ENABLED_SENSORS,
-                DEFAULT_ENABLED_SENSOR_KEYS,
-            )
-
-            if not enabled_sensors:
-                enabled_sensors = [ALL_SENSOR_KEYS[0]]
-
-            return self.async_create_entry(
-                title="",
-                data={
-                    CONF_REFRESH_INTERVAL: user_input.get(
-                        CONF_REFRESH_INTERVAL,
-                        DEFAULT_REFRESH_INTERVAL,
-                    ),
-                    CONF_ENABLED_SENSORS: enabled_sensors,
-                },
-            )
+            self._user_input = user_input
+            return await self.async_step_sensors()
 
         current_refresh_interval = self._config_entry.options.get(
             CONF_REFRESH_INTERVAL,
@@ -169,10 +224,7 @@ class SolarWebPublicOptionsFlow(config_entries.OptionsFlow):
             ),
         )
 
-        current_enabled_sensors = self._config_entry.options.get(
-            CONF_ENABLED_SENSORS,
-            DEFAULT_ENABLED_SENSOR_KEYS,
-        )
+        current_groups = self._config_entry.options.get(CONF_ENABLED_SENSOR_GROUPS, [])
 
         schema = vol.Schema(
             {
@@ -189,8 +241,68 @@ class SolarWebPublicOptionsFlow(config_entries.OptionsFlow):
                     )
                 ),
                 vol.Optional(
+                    CONF_ENABLED_SENSOR_GROUPS,
+                    default=current_groups,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=_sensor_group_options(),
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=schema,
+        )
+
+    async def async_step_sensors(self, user_input=None):
+        """Handle individual sensor selection."""
+
+        current_enabled_sensors = self._config_entry.options.get(
+            CONF_ENABLED_SENSORS,
+            DEFAULT_ENABLED_SENSOR_KEYS,
+        )
+        current_groups = self._config_entry.options.get(CONF_ENABLED_SENSOR_GROUPS, [])
+
+        selected_groups = self._user_input.get(
+            CONF_ENABLED_SENSOR_GROUPS,
+            current_groups,
+        )
+
+        if selected_groups:
+            default_sensors = _sensors_from_groups(selected_groups)
+        else:
+            default_sensors = current_enabled_sensors
+
+        if user_input is not None:
+            enabled_sensors = user_input.get(
+                CONF_ENABLED_SENSORS,
+                default_sensors,
+            )
+
+            if not enabled_sensors:
+                enabled_sensors = [ALL_SENSOR_KEYS[0]]
+
+            return self.async_create_entry(
+                title="",
+                data={
+                    CONF_REFRESH_INTERVAL: self._user_input.get(
+                        CONF_REFRESH_INTERVAL,
+                        DEFAULT_REFRESH_INTERVAL,
+                    ),
+                    CONF_ENABLED_SENSOR_GROUPS: selected_groups,
+                    CONF_ENABLED_SENSORS: enabled_sensors,
+                },
+            )
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
                     CONF_ENABLED_SENSORS,
-                    default=current_enabled_sensors,
+                    default=default_sensors,
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=_sensor_options(),
@@ -202,6 +314,6 @@ class SolarWebPublicOptionsFlow(config_entries.OptionsFlow):
         )
 
         return self.async_show_form(
-            step_id="init",
+            step_id="sensors",
             data_schema=schema,
         )

@@ -8,7 +8,15 @@
           "name": "Nome impianto",
           "shared_url": "URL condiviso Solar.web",
           "refresh_interval": "Intervallo aggiornamento",
-          "enabled_sensors": "Sensori da creare"
+          "enabled_sensor_groups": "Gruppi sensori",
+          "enabled_sensors": "Sensori"
+        }
+      },
+      "sensors": {
+        "title": "Sensori da attivare",
+        "description": "Seleziona i sensori da attivare in base ai gruppi scelti.",
+        "data": {
+          "enabled_sensors": "Sensori"
         }
       }
     },
@@ -27,7 +35,15 @@
         "description": "Modifica l'intervallo di aggiornamento e scegli quali sensori mantenere attivi per questo impianto. Il sensore principale viene sempre creato.",
         "data": {
           "refresh_interval": "Intervallo aggiornamento",
+          "enabled_sensor_groups": "Gruppi sensori",
           "enabled_sensors": "Sensori attivi"
+        }
+      },
+      "sensors": {
+        "title": "Sensori da attivare",
+        "description": "Seleziona i sensori da attivare in base ai gruppi scelti.",
+        "data": {
+          "enabled_sensors": "Sensori"
         }
       }
     }
