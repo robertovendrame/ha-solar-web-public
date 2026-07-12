@@ -1,0 +1,135 @@
+blueprint:
+  name: Solar Web Public - Notifica impianto offline
+  description: >-
+    Invia una notifica quando l'impianto Solar Web Public resta offline per almeno
+    il tempo impostato e continua a ripeterla finché non viene tacitata o l'impianto
+    torna online.
+  domain: automation
+  input:
+    plant_sensor:
+      name: Sensore impianto
+      description: Sensore principale creato dall'integrazione Solar Web Public (es. sensor.nome_impianto).
+      selector:
+        entity:
+          filter:
+            - domain:
+                - sensor
+          multiple: false
+    notification_service:
+      name: Servizio di notifica
+      description: Servizio di notifica Home Assistant (es. notify.mobile_app_telefono).
+      selector:
+        notify: {}
+    notification_title:
+      name: Titolo notifica
+      default: "Impianto offline"
+      selector:
+        text: {}
+    notification_message:
+      name: Messaggio notifica
+      default: "L'impianto {{ trigger.to_state.attributes.plant_name | default('impianto') }} è offline da oltre il tempo impostato."
+      selector:
+        text: {}
+    offline_duration:
+      name: Durata minima offline
+      description: Tempo minimo di offline prima di inviare la notifica.
+      default: "01:00:00"
+      selector:
+        duration: {}
+    repeat_interval:
+      name: Intervallo di ripetizione
+      description: Ogni quanto reinviare la notifica mentre è ancora offline.
+      default: "01:00:00"
+      selector:
+        duration: {}
+    acknowledge_helper:
+      name: Helper di stop
+      description: Un input_boolean helper che verrà attivato quando la notifica viene chiusa dall'utente.
+      selector:
+        entity:
+          filter:
+            - domain:
+                - input_boolean
+          multiple: false
+
+trigger:
+  - platform: state
+    entity_id: !input plant_sensor
+    to: offline
+    for: !input offline_duration
+    id: offline_start
+  - platform: state
+    entity_id: !input plant_sensor
+    from: offline
+    to:
+      - online
+      - unknown
+      - unavailable
+    id: offline_end
+  - platform: state
+    entity_id: !input acknowledge_helper
+    to: "on"
+    id: notification_ack
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: offline_start
+        sequence:
+          - variables:
+              notification_id: "{{ 'solar_web_public_offline_' ~ trigger.entity_id | replace('.', '_') }}"
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input acknowledge_helper
+          - repeat:
+              while:
+                - condition: state
+                  entity_id: !input plant_sensor
+                  state: offline
+                - condition: state
+                  entity_id: !input acknowledge_helper
+                  state: "off"
+              sequence:
+                - action: notify.send_message
+                  target: []
+                  service: !input notification_service
+                  title: '{{ notification_title }}'
+                  message: '{{ notification_message }}'
+                  data:
+                    tag: '{{ notification_id }}'
+                    ttl: 0
+                    priority: high
+                    action:
+                      - action: "acknowledge"
+                        title: "Chiudi"
+                        destructive: true
+                - delay: !input repeat_interval
+      - conditions:
+          - condition: trigger
+            id: offline_end
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input acknowledge_helper
+          - action: notify.clear_notification
+            target: []
+            service: !input notification_service
+            data:
+              tag: "{{ 'solar_web_public_offline_' ~ trigger.entity_id | replace('.', '_') }}"
+      - conditions:
+          - condition: trigger
+            id: notification_ack
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input acknowledge_helper
+          - action: notify.clear_notification
+            target: []
+            service: !input notification_service
+            data:
+              tag: "{{ 'solar_web_public_offline_' ~ trigger.entity_id | replace('.', '_') }}"
+
+mode: single

@@ -84,6 +84,12 @@ Then restart Home Assistant.
 
 Recommended refresh interval: `300` seconds.
 
+## Automation blueprint
+
+A ready-to-import blueprint is available at [blueprints/automation/solar_web_public_offline_alert.yaml](blueprints/automation/solar_web_public_offline_alert.yaml).
+
+It sends a notification when the plant stays offline for at least 1 hour and keeps repeating it until you acknowledge it or the plant comes back online.
+
 ## Example entities
 
 For a plant named `NAME_ID`, Home Assistant may create entities like:
@@ -162,13 +168,15 @@ Do not publish real public display tokens in screenshots, issues, examples, or d
 
 ## Development status
 
-Current version: `0.4.5`
+Current version: `0.4.6`
 
 Early but functional.
 
 ## Changelog
 
-### v0.4.5 (2024-12-XX)
+### v0.4.6 (2026-07-12)
+- **FEATURE**: Added an automation blueprint for offline notifications with repeat/acknowledge behavior
+- **IMPROVEMENT**: Documented blueprint usage in the README
 - **SECURITY**: Removed token logging from entity registry migration to prevent credential exposure
 - **CLEANUP**: Removed unused sensor_keys list from migration function
 - **IMPROVEMENT**: Improved logging messages to avoid exposing sensitive information
