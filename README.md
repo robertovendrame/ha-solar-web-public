@@ -168,11 +168,15 @@ Do not publish real public display tokens in screenshots, issues, examples, or d
 
 ## Development status
 
-Current version: `0.4.6`
+Current version: `0.4.7`
 
 Early but functional.
 
 ## Changelog
+
+### v0.4.7 (2026-07-12)
+- **FEATURE**: Added an automation blueprint for offline notifications with repeat/acknowledge behavior
+- **IMPROVEMENT**: Documented blueprint usage in the README
 
 ### v0.4.6 (2026-07-12)
 - **FEATURE**: Added an automation blueprint for offline notifications with repeat/acknowledge behavior
